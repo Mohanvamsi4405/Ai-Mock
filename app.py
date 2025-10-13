@@ -851,7 +851,10 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+    # Use the PORT environment variable provided by the hosting platform, or default to 8000
+    PORT = int(os.getenv("PORT", 8000))
     print("🎤 Starting Conversational AI Interview System...")
     print("📍 AI asks questions AND listens to your answers")
     print("💬 Real back-and-forth conversation like a human interviewer")
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=DEBUG)
+    uvicorn.run(app, host="0.0.0.0", port=PORT, reload=DEBUG) 
+
