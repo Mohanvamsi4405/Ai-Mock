@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Conversational AI Interview</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #059669;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --radius: 12px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            border-radius: var(--radius);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .conversation-flow {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .flow-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.9rem;
+            opacity: 0.9;
+            padding: 10px;
+        }
+
+        .flow-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .progress-section {
+            background: var(--surface);
+            padding: 25px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+            transition: width 0.5s ease;
+            width: 25%;
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .step {
+            text-align: center;
+            padding: 15px;
+            background: var(--border);
+            color: var(--text-light);
+            border-radius: var(--radius);
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .step.active {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .step.completed {
+            background: var(--success);
+            color: white;
+        }
+
+        .content-section {
+            display: none;
+            background: var(--surface);
+            padding: 30px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+        }
+
+        .content-section.active {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .upload-area {
+            border: 3px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 60px 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: linear-gradient(45deg, #f8fafc, #f1f5f9);
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--primary);
+            background: linear-gradient(45deg, #eff6ff, #dbeafe);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-secondary { background: var(--text-light); color: white; }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .interview-container {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 30px;
+            box-shadow: var(--shadow);
+        }
+
+        .conversation-status {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 2px solid var(--success);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .status-indicator {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--success);
+        }
+
+        .status-description {
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+        
+        /* Error/Disconnected Status */
+        .conversation-status.error {
+            background: #fee2e2;
+            border: 2px solid var(--danger);
+        }
+        .conversation-status.error .status-indicator {
+            color: var(--danger);
+        }
+
+
+        .voice-interface {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 3px solid var(--border);
+            border-radius: var(--radius);
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .voice-status {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text);
+            min-height: 30px;
+        }
+
+        .voice-indicator {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .voice-indicator.idle {
+            background: linear-gradient(135deg, var(--text-light), #94a3b8);
+            color: white;
+        }
+
+        .voice-indicator.ai_speaking {
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        .voice-indicator.listening_for_answer {
+            background: linear-gradient(135deg, var(--success), #10b981);
+            color: white;
+            animation: pulse 2s infinite; 
+            box-shadow: 0 0 20px rgba(5, 150, 105, 0.5);
+        }
+
+        .voice-indicator.processing_answer {
+            background: linear-gradient(135deg, var(--warning), #f59e0b);
+            color: white;
+            animation: spin 2s linear infinite;
+        }
+
+        .voice-indicator.ai_responding {
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .voice-indicator.error {
+            background: linear-gradient(135deg, var(--danger), #ef4444);
+            color: white;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .conversation-area {
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            height: 450px;
+            overflow-y: auto;
+            padding: 20px;
+            margin: 20px 0;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 85%;
+            animation: messageAppear 0.4s ease-out;
+            position: relative;
+        }
+
+        @keyframes messageAppear {
+            from { 
+                opacity: 0; 
+                transform: translateY(15px) scale(0.9); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0) scale(1); 
+            }
+        }
+
+        .message.ai {
+            background: linear-gradient(135deg, #eff6ff, #dbeafe);
+            border-left: 4px solid var(--primary);
+            margin-right: auto;
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            border-right: 4px solid var(--success);
+            margin-left: auto;
+        }
+
+        .message.system {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border: 2px solid var(--warning);
+            margin: 0 auto;
+            max-width: 70%;
+            text-align: center;
+            font-style: italic;
+        }
+        
+        .thinking-indicator {
+            background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+            border-left: 4px solid var(--text-light);
+            margin-right: auto;
+            animation: none; 
+        }
+
+        .thinking-dots {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .thinking-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--text-light);
+            border-radius: 50%;
+            animation: thinkingDot 1.4s infinite ease-in-out both;
+        }
+
+        .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes thinkingDot {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        /* Hidden UI elements for continuous mode */
+        #recordButton, #recordInstructions {
+            display: none !important;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 20px;
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 2px solid var(--border);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: var(--radius);
+            margin: 20px 0;
+            font-weight: 500;
+        }
+
+        .alert.success {
+            background: #d1fae5;
+            border: 2px solid var(--success);
+            color: #047857;
+        }
+
+        .alert.error {
+            background: #fee2e2;
+            border: 2px solid var(--danger);
+            color: #991b1b;
+        }
+
+        .alert.warning {
+            background: #fef3c7;
+            border: 2px solid var(--warning);
+            color: #92400e;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(37, 99, 235, 0.3);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .hidden { display: none !important; }
+
+        @media (max-width: 768px) {
+            .container { padding: 15px; }
+            .header h1 { font-size: 2rem; }
+            .conversation-flow { flex-direction: column; gap: 15px; }
+            .steps { grid-template-columns: 1fr; }
+            .voice-indicator { width: 80px; height: 80px; font-size: 2rem; }
+            .controls { flex-direction: column; align-items: center; }
+            .conversation-area { height: 350px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎤 Real-Time Conversational AI Interview</h1>
+            <p>Speak naturally. The AI will listen and respond instantly, no buttons needed.</p>
+            <div class="conversation-flow">
+                <div class="flow-step">
+                    <div class="flow-icon">🤖</div>
+                    <div>AI Asks Question</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-icon">📡</div>
+                    <div>Raw Audio Streams</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-icon">👂</div>
+                    <div>Server VAD Detects Speech</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-icon">💬</div>
+                    <div>AI Responds & Resumes Listening</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="progress-section">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="steps">
+                <div class="step active" id="step1">Resume Upload</div>
+                <div class="step" id="step2">Interview Setup</div>
+                <div class="step" id="step3">AI Conversation</div>
+                <div class="step" id="step4">Results</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Resume Upload -->
+        <div class="content-section active" id="section1">
+            <h2>📄 Upload Your Resume</h2>
+            <p>Upload your PDF resume for personalized interview questions.</p>
+
+            <div class="upload-area" id="uploadArea">
+                <span class="upload-icon">📁</span>
+                <h3>Drop PDF here or click to browse</h3>
+                <p>Maximum 10MB • PDF format only</p>
+                <input type="file" id="resumeFile" accept=".pdf" style="display: none;">
+            </div>
+
+            <div id="uploadResult"></div>
+        </div>
+
+        <!-- Step 2: Interview Setup -->
+        <div class="content-section" id="section2">
+            <h2>💼 Interview Setup</h2>
+            <p>Provide job details for targeted questions (optional).</p>
+
+            <div class="form-group">
+                <label class="form-label" for="jobRole">Job Role</label>
+                <input type="text" class="form-control" id="jobRole" placeholder="e.g., Senior Developer, Data Scientist">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="jobDescription">Job Description</label>
+                <textarea class="form-control" id="jobDescription" rows="4" 
+                    placeholder="Paste job description for more targeted questions..."></textarea>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-primary" id="setupInterview">🚀 Start Conversation</button>
+                <button class="btn btn-secondary" id="skipJobDesc">Skip & Continue</button>
+            </div>
+        </div>
+
+        <!-- Step 3: AI Conversation -->
+        <div class="content-section" id="section3">
+            <h2>💬 AI Interview Conversation</h2>
+
+            <div class="conversation-status" id="conversationStatus">
+                <div class="status-indicator" id="statusIndicator">🔗 Connecting to AI interviewer...</div>
+                <div class="status-description" id="statusDescription">Preparing for your conversation</div>
+            </div>
+            
+            <div id="reconnectArea" class="hidden controls">
+                 <button class="btn btn-warning" id="reconnectButton">🔄 Try Reconnect</button>
+            </div>
+
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="currentQuestion">1</div>
+                    <div class="stat-label">Current Question</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="totalQuestions">4</div>
+                    <div class="stat-label">Total Questions</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="timer">00:00</div>
+                    <div class="stat-label">Duration</div>
+                </div>
+            </div>
+
+            <div class="interview-container">
+                <div class="voice-interface">
+                    <div class="voice-status" id="voiceStatus">Preparing continuous audio stream...</div>
+                    <div class="voice-indicator idle" id="voiceIndicator">🎤</div>
+                    <div id="voiceInstructions">The microphone is OPEN. Speak when ready, and the AI will auto-detect your speech.</div>
+                </div>
+
+                <div class="conversation-area" id="conversationArea">
+                    <div class="message system">
+                        <div class="message-content">Connecting to your AI interviewer and establishing continuous audio stream...</div>
+                    </div>
+                </div>
+
+                <!-- These are hidden in continuous mode -->
+                <button class="record-button" id="recordButton" disabled>🎙️</button>
+                <div class="record-instructions" id="recordInstructions"></div>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-warning" id="nextQuestion">⏭️ Next Question</button>
+                <button class="btn btn-danger" id="endInterview">🛑 End Interview</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Results -->
+        <div class="content-section" id="section4">
+            <h2>📊 Interview Complete!</h2>
+            <p>Your conversational interview has ended successfully.</p>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="finalQuestions">0</div>
+                    <div class="stat-label">Questions Answered</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="finalDuration">00:00</div>
+                    <div class="stat-label">Total Duration</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="responseCount">0</div>
+                    <div class="stat-label">Responses Given</div>
+                </div>
+            </div>
+
+            <div class="conversation-area" id="finalTranscript">
+                <!-- Final transcript will be inserted here -->
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-primary" id="downloadTranscript">💾 Download Transcript</button>
+                <button class="btn btn-success" id="newInterview">🔄 New Interview</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let currentStep = 1;
+        let sessionId = null;
+        let websocket = null;
+        let audioStream = null;
+        let conversationState = 'idle'; // idle, ai_speaking, listening_for_answer, processing_answer
+        let startTime = null;
+        let currentQuestionNum = 1;
+        let totalQuestionsNum = 4;
+        let speechSynthesis = window.speechSynthesis;
+        let currentUtterance = null;
+        let audioContext = null;
+        let audioProcessor = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 5;
+
+        // DOM elements
+        const elements = {
+            uploadArea: document.getElementById('uploadArea'),
+            resumeFile: document.getElementById('resumeFile'),
+            uploadResult: document.getElementById('uploadResult'),
+            setupInterview: document.getElementById('setupInterview'),
+            skipJobDesc: document.getElementById('skipJobDesc'),
+            conversationStatus: document.getElementById('conversationStatus'),
+            statusIndicator: document.getElementById('statusIndicator'),
+            statusDescription: document.getElementById('statusDescription'),
+            reconnectArea: document.getElementById('reconnectArea'),
+            reconnectButton: document.getElementById('reconnectButton'),
+            voiceStatus: document.getElementById('voiceStatus'),
+            voiceIndicator: document.getElementById('voiceIndicator'),
+            voiceInstructions: document.getElementById('voiceInstructions'),
+            conversationArea: document.getElementById('conversationArea'),
+            nextQuestion: document.getElementById('nextQuestion'),
+            endInterview: document.getElementById('endInterview'),
+            currentQuestion: document.getElementById('currentQuestion'),
+            totalQuestions: document.getElementById('totalQuestions'),
+            timer: document.getElementById('timer')
+        };
+
+        // --- Core Application Logic ---
+
+        function init() {
+            setupEventListeners();
+            setupDragAndDrop();
+            updateProgress();
+            console.log('🎤 Real-Time Conversational AI system initialized');
+        }
+
+        function setupEventListeners() {
+            elements.uploadArea.addEventListener('click', () => elements.resumeFile.click());
+            elements.resumeFile.addEventListener('change', handleFileUpload);
+            elements.setupInterview.addEventListener('click', handleSetupInterview);
+            elements.skipJobDesc.addEventListener('click', handleSkipJobDescription);
+            elements.nextQuestion.addEventListener('click', handleNextQuestion);
+            elements.endInterview.addEventListener('click', handleEndInterview);
+            elements.reconnectButton.addEventListener('click', setupWebSocket);
+            document.getElementById('downloadTranscript')?.addEventListener('click', downloadTranscript);
+            document.getElementById('newInterview')?.addEventListener('click', () => location.reload());
+        }
+
+        function setupDragAndDrop() {
+            elements.uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                elements.uploadArea.classList.add('dragover');
+            });
+            elements.uploadArea.addEventListener('dragleave', () => {
+                elements.uploadArea.classList.remove('dragover');
+            });
+            elements.uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                elements.uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileSelection(files[0]);
+                }
+            });
+        }
+
+        function updateProgress() {
+            const progressFill = document.getElementById('progressFill');
+            const progressPercent = (currentStep / 4) * 100;
+            progressFill.style.width = progressPercent + '%';
+
+            for (let i = 1; i <= 4; i++) {
+                const step = document.getElementById('step' + i);
+                const section = document.getElementById('section' + i);
+
+                if (i < currentStep) {
+                    step.classList.add('completed');
+                    step.classList.remove('active');
+                    section.classList.remove('active');
+                } else if (i === currentStep) {
+                    step.classList.add('active');
+                    step.classList.remove('completed');
+                    section.classList.add('active');
+                } else {
+                    step.classList.remove('active', 'completed');
+                    section.classList.remove('active');
+                }
+            }
+        }
+
+        function showAlert(message, type = 'success') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert ${type}`;
+            alertDiv.innerHTML = message;
+            elements.uploadResult.innerHTML = '';
+            elements.uploadResult.appendChild(alertDiv);
+        }
+
+        // --- Step 1 & 2 Handlers (Mocked API calls for front-end focus) ---
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) await handleFileSelection(file);
+        }
+
+        async function handleFileSelection(file) {
+            if (!file.type.includes('pdf')) {
+                showAlert('Please select a PDF file.', 'error');
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                showAlert('File size must be less than 10MB.', 'error');
+                return;
+            }
+            showAlert('<div class="loading"><div class="spinner"></div>Processing resume... (Mocking API call)</div>', 'warning');
+
+            // --- MOCK API CALL START ---
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            sessionId = 'mock-session-12345'; // Set a mock session ID
+            const mockResult = {
+                success: true,
+                parsedContent: { skills: ['JavaScript', 'Python', 'React'], experience: [1, 2] }
+            };
+            // --- MOCK API CALL END ---
+
+            if (mockResult.success) {
+                showAlert(`✅ <strong>Resume processed successfully!</strong><br>
+                    📊 Skills found: ${mockResult.parsedContent.skills.slice(0, 8).join(', ')}<br>
+                    📝 Experience entries: ${mockResult.parsedContent.experience.length}`, 'success');
+
+                setTimeout(() => {
+                    currentStep = 2;
+                    updateProgress();
+                }, 2000);
+            } else {
+                showAlert('Mocked failure to process resume', 'error');
+            }
+        }
+
+        async function handleSetupInterview() {
+            if (!sessionId) {
+                showAlert('Please upload a resume first.', 'error');
+                return;
+            }
+
+            // --- MOCK API CALL START ---
+            showAlert('⚙️ Generating questions... (Mocking API call)', 'warning');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const mockQuestions = [{ text: "Tell me about a time..." }, { text: "How do you handle..." }, { text: "What is your greatest..." }, {text: "Final question..."}];
+            // --- MOCK API CALL END ---
+
+            totalQuestionsNum = mockQuestions.length;
+            elements.totalQuestions.textContent = totalQuestionsNum;
+            showAlert(`✅ <strong>Generated ${mockQuestions.length} conversational questions!</strong><br>
+                🎯 Starting real-time conversation where the AI auto-detects your voice!`, 'success');
+
+            setTimeout(async () => {
+                currentStep = 3;
+                updateProgress();
+                await startConversationalInterview();
+            }, 2500);
+        }
+
+        function handleSkipJobDescription() {
+            handleSetupInterview();
+        }
+
+        // --- Step 3: Real-Time Conversation Logic ---
+
+        async function startConversationalInterview() {
+            if (!sessionId) return;
+
+            updateConversationStatus('🔗 Requesting microphone access...', 'Please allow microphone access for the continuous stream');
+
+            try {
+                // Request microphone access
+                audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100 // Browser default
+                    }
+                });
+
+                setupWebSocket();
+                startTimer();
+                updateConversationStatus('🤖 Connecting to AI interviewer...', 'Preparing real-time conversation stream');
+
+            } catch (error) {
+                console.error('Microphone access denied:', error);
+                showAlert('Microphone access is required for real-time conversation. Please allow access and refresh.', 'error');
+                updateConversationStatus('❌ Microphone access denied', 'Please refresh and allow microphone access');
+            }
+        }
+
+        function setupWebSocket() {
+            // Check if connection is already open or opening
+            if (websocket && (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+
+            // Ensure mic stream is active before trying to connect/reconnect
+            if (!audioStream) {
+                 startConversationalInterview();
+                 return;
+            }
+
+            elements.reconnectArea.classList.add('hidden');
+            reconnectAttempts++;
+            if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+                updateConversationStatus('🛑 Max Reconnect Attempts Reached', 'Please refresh the page to start a new session.', 'error');
+                return;
+            }
+
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            // Placeholder URL for the real-time WebSocket endpoint
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/${sessionId}/realtime`; 
+
+            websocket = new WebSocket(wsUrl);
+
+            websocket.onopen = () => {
+                console.log('🔗 WebSocket connected - starting continuous audio stream');
+                updateConversationStatus('✅ Connected. Starting AI conversation...', 'The AI is about to ask the first question');
+                
+                // Start continuous streaming once WebSocket is open
+                startContinuousRecording(); 
+                
+                // Send initial setup message to trigger the first question (Mock)
+                websocket.send(JSON.stringify({ type: 'start_conversation' }));
+                reconnectAttempts = 0; // Reset attempts on success
+                elements.conversationStatus.classList.remove('error');
+            };
+
+            websocket.onmessage = handleWebSocketMessage;
+
+            websocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                // Note: onerror fires before onclose for connection errors
+            };
+
+            websocket.onclose = () => {
+                console.log('WebSocket closed. Attempting reconnect in 3s...');
+                
+                // Stop audio streaming to prevent sending data to a closed socket
+                stopContinuousRecording(); 
+                
+                updateConversationStatus('🔌 Connection closed or lost', 'The interview connection was interrupted.', 'error');
+                elements.conversationStatus.classList.add('error');
+                updateVoiceInterface('❌ Disconnected', 'error', 'Attempting to restore connection...');
+                elements.reconnectArea.classList.remove('hidden');
+                
+                // Optional automatic reconnect logic
+                // setTimeout(() => setupWebSocket(), 3000); 
+            };
+        }
+
+        // Utility to convert Float32Array to Int16Array (16-bit PCM for server ASR)
+        function convertFloat32To16BitPCM(input) {
+            let offset = 0;
+            const buffer = new ArrayBuffer(input.length * 2);
+            const view = new DataView(buffer);
+            for (let i = 0; i < input.length; i++, offset += 2) {
+                const s = Math.max(-1, Math.min(1, input[i]));
+                // Scale to 16-bit
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true); 
+            }
+            return buffer;
+        }
+
+        function startContinuousRecording() {
+            // Stop existing processor if running
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close();
+                audioContext = null;
+                audioProcessor = null;
+            }
+
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            
+            // Set up AudioContext for 16kHz sample rate (standard for ASR)
+            audioContext = new AudioContext({ sampleRate: 16000 }); 
+            const source = audioContext.createMediaStreamSource(audioStream);
+            
+            // ScriptProcessorNode is used for wide compatibility
+            audioProcessor = audioContext.createScriptProcessor(4096, 1, 1); 
+            
+            audioProcessor.onaudioprocess = (e) => {
+                // Only stream if WebSocket is open AND AI is listening
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    const pcmData = convertFloat32To16BitPCM(inputData);
+                    
+                    // Send raw binary ArrayBuffer data
+                    websocket.send(pcmData); 
+                }
+            };
+            
+            source.connect(audioProcessor);
+            // Connect to context destination to prevent chrome from muting the stream
+            audioProcessor.connect(audioContext.destination); 
+            
+            updateVoiceInterface('👂 Listening Continuously', 'listening_for_answer', 'Speak naturally. Server is using VAD to detect your voice.');
+        }
+        
+        // Stops the audio stream and closes microphone access locally
+        function stopContinuousRecording() {
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close();
+                audioContext = null;
+                audioProcessor = null;
+            }
+        }
+
+
+        function handleWebSocketMessage(event) {
+            const data = JSON.parse(event.data);
+            console.log('📨 Received:', data.type);
+            
+            // Ensure mic stream is back on if the server response moves us back to listening
+            if (data.type !== 'interview_completed') {
+                startContinuousRecording(); 
+            }
+
+            switch (data.type) {
+                case 'ai_question':
+                    conversationState = 'ai_speaking';
+                    addMessage('ai', data.content);
+                    updateVoiceInterface('🗣️ AI is speaking...', 'ai_speaking', 'The AI interviewer is talking');
+
+                    if (data.speak) {
+                        speakText(data.content, () => {
+                            conversationState = 'listening_for_answer';
+                            updateVoiceInterface('👂 Listening Continuously', 'listening_for_answer', 'Speak when ready. VAD is listening.');
+                        });
+                    }
+                    if (data.questionNumber) {
+                        currentQuestionNum = data.questionNumber;
+                        elements.currentQuestion.textContent = currentQuestionNum;
+                    }
+                    break;
+
+                case 'user_response_start':
+                    updateVoiceInterface('👤 User Speaking...', 'listening_for_answer', 'Server detected your voice. Keep talking.');
+                    break;
+
+                case 'user_response_shown':
+                    addMessage('user', data.content);
+                    removeThinkingIndicator();
+                    
+                    conversationState = 'processing_answer';
+                    updateVoiceInterface('⚙️ Processing your response...', 'processing_answer', 'AI is thinking about your answer');
+                    showThinkingIndicator();
+                    break;
+
+                case 'ai_conversational_response':
+                    conversationState = 'ai_speaking';
+                    addMessage('ai', data.content);
+                    updateVoiceInterface('🗣️ AI is responding...', 'ai_responding', 'AI is having a conversation with you');
+
+                    if (data.speak) {
+                        speakText(data.content, () => {
+                            conversationState = 'listening_for_answer';
+                            updateVoiceInterface('👂 Listening Continuously', 'listening_for_answer', 'Speak when ready. VAD is listening.');
+                        });
+                    }
+                    break;
+                
+                case 'interview_completed':
+                    conversationState = 'completed';
+                    addMessage('ai', data.content);
+                    updateConversationStatus('🎉 Interview completed!', 'The AI has finished asking questions');
+                    updateVoiceInterface('✅ Interview finished', 'idle', 'Conversation complete');
+                    
+                    if (websocket) websocket.close(); // Close connection
+                    stopContinuousRecording(); 
+
+                    if (data.speak) {
+                        speakText(data.content);
+                    }
+
+                    setTimeout(() => {
+                        currentStep = 4;
+                        updateProgress();
+                        showResults();
+                    }, 4000);
+                    break;
+
+                case 'error':
+                    console.error('Server error:', data.message);
+                    addMessage('system', '❌ Server Error: ' + data.message);
+                    updateConversationStatus('❌ Error occurred', data.message, 'error');
+                    updateVoiceInterface('❌ Error', 'error', 'Check console for details');
+                    break;
+            }
+        }
+
+        // --- UI and Utility Functions (Unchanged) ---
+
+        function addMessage(type, content) {
+            removeThinkingIndicator();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            let icon = '🤖';
+            let sender = 'AI Interviewer';
+
+            if (type === 'user') {
+                icon = '👤';
+                sender = 'You';
+            } else if (type === 'system') {
+                icon = '🔧';
+                sender = 'System';
+            }
+
+            if (type !== 'system') {
+                messageDiv.innerHTML = `
+                    <div class="message-header">${icon} ${sender}</div>
+                    <div class="message-content">${content}</div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="message-content">${content}</div>
+                `;
+            }
+
+            elements.conversationArea.appendChild(messageDiv);
+            elements.conversationArea.scrollTop = elements.conversationArea.scrollHeight;
+        }
+
+        function showThinkingIndicator() {
+            removeThinkingIndicator();
+            // ... (thinking indicator logic)
+            const thinkingDiv = document.createElement('div');
+            thinkingDiv.className = 'message thinking-indicator';
+            thinkingDiv.id = 'thinkingIndicator';
+            thinkingDiv.innerHTML = `
+                <div class="message-header">🤖 AI Interviewer</div>
+                <div class="message-content">
+                    <div class="thinking-dots">
+                        <div class="thinking-dot"></div>
+                        <div class="thinking-dot"></div>
+                        <div class="thinking-dot"></div>
+                        <span style="margin-left: 10px;">thinking about your response...</span>
+                    </div>
+                </div>
+            `;
+            elements.conversationArea.appendChild(thinkingDiv);
+            elements.conversationArea.scrollTop = elements.conversationArea.scrollHeight;
+        }
+
+        function removeThinkingIndicator() {
+            const existing = document.getElementById('thinkingIndicator');
+            if (existing) {
+                existing.remove();
+            }
+        }
+
+        function speakText(text, onendCallback = () => {}) {
+            if (!text) return onendCallback(); // Run callback immediately if no text
+
+            speechSynthesis.cancel();
+
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            currentUtterance.rate = 0.9;
+            currentUtterance.volume = 0.8;
+            currentUtterance.pitch = 1.0;
+
+            const voices = speechSynthesis.getVoices();
+            const preferredVoice = voices.find(voice => 
+                voice.name.includes('Google') || 
+                voice.name.includes('Microsoft') ||
+                (voice.lang.includes('en') && voice.name.includes('Female'))
+            );
+            if (preferredVoice) {
+                currentUtterance.voice = preferredVoice;
+            }
+
+            currentUtterance.onend = () => onendCallback(); 
+            currentUtterance.onerror = (error) => {
+                console.error('Speech error:', error);
+                onendCallback(); 
+            };
+
+            speechSynthesis.speak(currentUtterance);
+        }
+        
+        function updateConversationStatus(indicator, description, type = 'success') {
+            elements.statusIndicator.textContent = indicator;
+            elements.statusDescription.textContent = description;
+            elements.conversationStatus.className = `conversation-status ${type}`;
+        }
+
+        function updateVoiceInterface(status, state, instructions) {
+            elements.voiceStatus.textContent = status;
+            elements.voiceIndicator.className = `voice-indicator ${state}`;
+            elements.voiceInstructions.textContent = instructions;
+
+            const icons = {
+                idle: '🎤',
+                ai_speaking: '🗣️',
+                listening_for_answer: '👂',
+                processing_answer: '⚙️',
+                ai_responding: '💬',
+                error: '❌'
+            };
+
+            elements.voiceIndicator.textContent = icons[state] || '🎤';
+        }
+
+        function handleNextQuestion() {
+            // Send the next question command if the connection is open
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify({ type: 'next_question' }));
+                speechSynthesis.cancel(); 
+            } else {
+                console.warn('Cannot send next_question: WebSocket is not open.');
+                addMessage('system', 'Cannot send command: WebSocket connection is lost. Try reconnecting or ending the interview.');
+            }
+        }
+
+        function handleEndInterview() {
+            if (confirm('End the interview? Your conversation transcript will be saved locally.')) {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    // Tell server to end session and close connection
+                    websocket.send(JSON.stringify({ type: 'end_interview' }));
+                    websocket.close();
+                } else {
+                    // Force client-side transition to results if connection is already closed
+                    addMessage('system', 'Interview forced to end locally due to connection issue. Transcript saved.');
+                    setTimeout(() => {
+                        currentStep = 4;
+                        updateProgress();
+                        showResults();
+                    }, 500); // Small delay to show final message
+                }
+                stopContinuousRecording(); 
+            }
+        }
+
+        function startTimer() {
+            startTime = Date.now();
+            setInterval(() => {
+                if (startTime) {
+                    const elapsed = Date.now() - startTime;
+                    const minutes = Math.floor(elapsed / 60000);
+                    const seconds = Math.floor((elapsed % 60000) / 1000);
+                    elements.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+
+        function showResults() {
+            const finalDuration = elements.timer.textContent;
+            const responseCount = document.querySelectorAll('.message.user').length;
+
+            document.getElementById('finalQuestions').textContent = currentQuestionNum;
+            document.getElementById('finalDuration').textContent = finalDuration;
+            document.getElementById('responseCount').textContent = responseCount;
+
+            const finalTranscript = document.getElementById('finalTranscript');
+            finalTranscript.innerHTML = elements.conversationArea.innerHTML;
+        }
+
+        function downloadTranscript() {
+            const messages = document.querySelectorAll('.message:not(.thinking-indicator)');
+            let transcript = 'Conversational AI Interview Transcript\n';
+            transcript += '======================================\n\n';
+            transcript += `Date: ${new Date().toLocaleDateString()}\n`;
+            transcript += `Duration: ${elements.timer.textContent}\n\n`;
+
+            messages.forEach(message => {
+                const header = message.querySelector('.message-header');
+                const content = message.querySelector('.message-content').textContent;
+
+                if (header) {
+                    transcript += `${header.textContent}\n${content}\n\n`;
+                } else {
+                    transcript += `System: ${content}\n\n`;
+                }
+            });
+
+            const blob = new Blob([transcript], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `conversational_interview_${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (websocket) websocket.close();
+            stopContinuousRecording(); 
+        });
+    </script>
+</body>
+</html>
