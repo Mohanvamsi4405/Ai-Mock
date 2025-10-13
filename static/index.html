@@ -35,7 +35,7 @@
         .container {
             max-width: 1000px;
             margin: 0 auto;
-            padding: 20px; /* Base padding for desktop */
+            padding: 20px;
         }
 
         .header {
@@ -65,7 +65,6 @@
             align-items: center;
             font-size: 0.9rem;
             opacity: 0.9;
-            flex-basis: 30%; /* Give steps a defined width */
         }
 
         .flow-icon {
@@ -177,7 +176,6 @@
             font-weight: 600;
             text-decoration: none;
             transition: all 0.3s ease;
-            text-align: center; /* Ensures text is centered in button */
         }
 
         .btn:hover {
@@ -390,7 +388,7 @@
             background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
             border-left: 4px solid var(--text-light);
             margin-right: auto;
-            animation: none; /* remove pulse on the block itself */
+            animation: pulse 1.5s infinite;
         }
 
         .thinking-dots {
@@ -444,7 +442,6 @@
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
-            animation: none; /* Stop pulse when disabled */
         }
 
         .record-instructions {
@@ -489,12 +486,6 @@
             gap: 15px;
             margin: 30px 0;
             flex-wrap: wrap;
-        }
-        
-        /* Make buttons in controls fill width on mobile */
-        .controls .btn {
-            flex: 1 1 auto;
-            max-width: 300px; /* Max width on desktop */
         }
 
         .alert {
@@ -543,65 +534,14 @@
 
         .hidden { display: none !important; }
 
-        /* --- MOBILE OPTIMIZATIONS (Max Width 768px) --- */
         @media (max-width: 768px) {
             .container { padding: 15px; }
-            .header { padding: 30px 15px; }
-            .header h1 { font-size: 1.8rem; }
-            .header p { font-size: 0.9rem; }
-
-            /* Improved conversation flow layout for mobile */
-            .conversation-flow { 
-                flex-direction: row; 
-                flex-wrap: wrap; 
-                gap: 10px;
-            }
-            .flow-step {
-                flex-basis: 30%; /* Keep them spaced out horizontally */
-                font-size: 0.8rem;
-            }
-            .flow-icon { font-size: 1.5rem; margin-bottom: 5px; }
-
-            .steps { 
-                /* Allow for two columns on smaller screens, or stack if necessary */
-                grid-template-columns: repeat(2, 1fr); 
-                gap: 10px;
-            }
-            .step { padding: 12px; font-size: 0.9rem; }
-
-            .content-section { padding: 20px; }
-            .upload-area { padding: 40px 20px; }
-            .upload-icon { font-size: 3rem; margin-bottom: 15px; }
-            .upload-area h3 { font-size: 1.1rem; }
-            .upload-area p { font-size: 0.85rem; }
-
-            .stats {
-                /* Make stats stack vertically on very small screens */
-                grid-template-columns: 1fr; 
-                gap: 15px;
-            }
-            .stat-value { font-size: 1.8rem; }
-            .stat-label { font-size: 0.8rem; }
-
-            .voice-indicator { width: 70px; height: 70px; font-size: 1.8rem; }
-            .voice-status { font-size: 1.1rem; }
-
-            .conversation-area { height: 350px; padding: 15px; }
-            .message { max-width: 95%; padding: 12px 16px; }
-
-            .record-button { width: 70px; height: 70px; font-size: 1.8rem; }
-
-            /* Stack all buttons in controls vertically on mobile */
-            .controls { 
-                flex-direction: column; 
-                align-items: stretch; 
-                gap: 10px;
-            }
-            .controls .btn {
-                width: 100%;
-                max-width: 100%; /* Override max-width for full mobile width */
-                padding: 16px 20px;
-            }
+            .header h1 { font-size: 2rem; }
+            .conversation-flow { flex-direction: column; gap: 15px; }
+            .steps { grid-template-columns: 1fr; }
+            .voice-indicator { width: 80px; height: 80px; font-size: 2rem; }
+            .controls { flex-direction: column; align-items: center; }
+            .conversation-area { height: 350px; }
         }
     </style>
 </head>
@@ -638,6 +578,7 @@
             </div>
         </div>
 
+        <!-- Step 1: Resume Upload -->
         <div class="content-section active" id="section1">
             <h2>📄 Upload Your Resume</h2>
             <p>Upload your PDF resume for personalized interview questions.</p>
@@ -645,13 +586,14 @@
             <div class="upload-area" id="uploadArea">
                 <span class="upload-icon">📁</span>
                 <h3>Drop PDF here or click to browse</h3>
-                <p>Maximum 10MB &bullet; PDF format only</p>
+                <p>Maximum 10MB • PDF format only</p>
                 <input type="file" id="resumeFile" accept=".pdf" style="display: none;">
             </div>
 
             <div id="uploadResult"></div>
         </div>
 
+        <!-- Step 2: Interview Setup -->
         <div class="content-section" id="section2">
             <h2>💼 Interview Setup</h2>
             <p>Provide job details for targeted questions (optional).</p>
@@ -673,6 +615,7 @@
             </div>
         </div>
 
+        <!-- Step 3: AI Conversation -->
         <div class="content-section" id="section3">
             <h2>💬 AI Interview Conversation</h2>
 
@@ -721,6 +664,7 @@
             </div>
         </div>
 
+        <!-- Step 4: Results -->
         <div class="content-section" id="section4">
             <h2>📊 Interview Complete!</h2>
             <p>Your conversational interview has ended successfully.</p>
@@ -741,7 +685,8 @@
             </div>
 
             <div class="conversation-area" id="finalTranscript">
-                </div>
+                <!-- Final transcript -->
+            </div>
 
             <div class="controls">
                 <button class="btn btn-primary" id="downloadTranscript">💾 Download Transcript</button>
@@ -809,23 +754,16 @@
             elements.recordButton.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 startRecording();
-            }, { passive: false });
+            });
             elements.recordButton.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 stopRecording();
-            }, { passive: false });
+            });
 
             elements.nextQuestion.addEventListener('click', handleNextQuestion);
             elements.endInterview.addEventListener('click', handleEndInterview);
             document.getElementById('downloadTranscript')?.addEventListener('click', downloadTranscript);
             document.getElementById('newInterview')?.addEventListener('click', () => location.reload());
-            
-            // Wait for voices to load for better speech synthesis quality
-            if (speechSynthesis.onvoiceschanged !== undefined) {
-                speechSynthesis.onvoiceschanged = () => {
-                    console.log("Speech voices loaded.");
-                };
-            }
         }
 
         function setupDragAndDrop() {
@@ -850,8 +788,7 @@
 
         function updateProgress() {
             const progressFill = document.getElementById('progressFill');
-            // Calculate percentage based on current step / total steps
-            const progressPercent = (currentStep / 4) * 100; 
+            const progressPercent = (currentStep / 4) * 100;
             progressFill.style.width = progressPercent + '%';
 
             for (let i = 1; i <= 4; i++) {
@@ -861,14 +798,13 @@
                 if (i < currentStep) {
                     step.classList.add('completed');
                     step.classList.remove('active');
-                    if (section) section.classList.remove('active');
                 } else if (i === currentStep) {
                     step.classList.add('active');
                     step.classList.remove('completed');
-                    if (section) section.classList.add('active');
+                    section.classList.add('active');
                 } else {
                     step.classList.remove('active', 'completed');
-                    if (section) section.classList.remove('active');
+                    section.classList.remove('active');
                 }
             }
         }
@@ -902,28 +838,18 @@
             const formData = new FormData();
             formData.append('file', file);
 
-            // Mocking API call for frontend-only code
             try {
-                // In a real app, this would be your API endpoint
-                // const response = await fetch('/upload-resume', { method: 'POST', body: formData });
-                // const result = await response.json();
-                
-                // Mock result after a delay
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                const mockResult = {
-                    success: true,
-                    sessionId: 'mock-session-12345',
-                    parsedContent: {
-                        skills: ['JavaScript', 'React', 'Python', 'AWS', 'Docker', 'SQL', 'Git', 'Agile'],
-                        experience: [1, 2, 3]
-                    }
-                };
-                const result = mockResult;
+                const response = await fetch('/upload-resume', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
 
                 if (result.success) {
                     sessionId = result.sessionId;
                     showAlert(`✅ <strong>Resume processed successfully!</strong><br>
-                        📊 Key Skills: ${result.parsedContent.skills.slice(0, 5).join(', ')}...<br>
+                        📊 Skills found: ${result.parsedContent.skills.slice(0, 8).join(', ')}<br>
                         📝 Experience entries: ${result.parsedContent.experience.length}`, 'success');
 
                     setTimeout(() => {
@@ -940,8 +866,8 @@
 
         async function handleSetupInterview() {
             if (!sessionId) {
-                // If skipping upload in a real scenario, you'd generate a session now.
-                sessionId = 'mock-session-general'; 
+                showAlert('Please upload a resume first.', 'error');
+                return;
             }
 
             const jobRole = document.getElementById('jobRole').value.trim();
@@ -955,32 +881,27 @@
                 };
             }
 
-            // Mocking API call for interview setup
             try {
-                // In a real app: fetch('/setup-interview', { method: 'POST', body: JSON.stringify(requestData) });
-                
-                // Mock result
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                const mockResult = {
-                    success: true,
-                    questions: Array(4).fill(0), // 4 questions
-                    message: 'Setup successful'
-                };
-                const result = mockResult;
+                const response = await fetch('/setup-interview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+
+                const result = await response.json();
 
                 if (result.success) {
                     totalQuestionsNum = result.questions.length;
                     elements.totalQuestions.textContent = totalQuestionsNum;
 
-                    // Clear previous alert messages from step 1
-                    document.getElementById('uploadResult').innerHTML = ''; 
+                    showAlert(`✅ <strong>Generated ${result.questions.length} conversational questions!</strong><br>
+                        🎯 Ready to start your AI conversation where the AI asks AND listens!`, 'success');
 
                     setTimeout(async () => {
                         currentStep = 3;
                         updateProgress();
-                        // This starts the conversation
-                        await startConversationalInterview(); 
-                    }, 100); 
+                        await startConversationalInterview();
+                    }, 2500);
                 } else {
                     showAlert(result.message || 'Failed to setup interview', 'error');
                 }
@@ -997,7 +918,6 @@
             if (!sessionId) return;
 
             updateConversationStatus('🔗 Requesting microphone access...', 'Please allow microphone access for the conversation');
-            elements.recordButton.disabled = true; // Disable button until fully ready
 
             try {
                 // Get microphone access
@@ -1009,10 +929,9 @@
                     }
                 });
 
-                // Mock WebSocket setup and message flow
-                setupMockWebSocket();
+                setupWebSocket();
                 startTimer();
-                updateConversationStatus('🤖 Connected to AI interviewer', 'Preparing for conversation');
+                updateConversationStatus('🤖 Connecting to AI interviewer...', 'Preparing for conversation');
 
             } catch (error) {
                 console.error('Microphone access denied:', error);
@@ -1021,101 +940,32 @@
             }
         }
 
-        // --- MOCK WEBSOCKET & CONVERSATION LOGIC ---
-        let mockMessageQueue = [
-            { type: 'ai_message', content: 'Hello, I will be your interviewer today. We will go through a few questions about your background and qualifications. To answer, hold the mic button, speak, and release. Ready to start?', speak: true },
-            { type: 'start_listening' },
-            { type: 'user_response_shown', content: 'I am ready. I have prepared for this interview by studying the company and the job description, and I\'m excited to discuss my experience.' },
-            { type: 'processing_response' },
-            { type: 'ai_conversational_response', content: "That's great to hear! Let's begin with the first question. Tell me about a complex project you led. How did you organize the team, manage unexpected roadblocks, and ensure its successful delivery?", speak: true, questionNumber: 1 },
-            { type: 'start_listening' },
-            { type: 'user_response_shown', content: 'My last major project involved migrating our core database to a cloud-based solution. The key challenge was minimizing downtime. I structured the team into three workstreams: planning, migration, and testing. We hit a snag when a legacy system showed unexpected schema incompatibilities, which we fixed by building a small microservice layer as an intermediary.' },
-            { type: 'processing_response' },
-            { type: 'ai_conversational_response', content: 'That sounds like a significant challenge. Building an intermediary service to handle schema incompatibility shows excellent technical problem-solving. Could you elaborate on how you communicated the *risk* of this roadblock to your non-technical stakeholders?', speak: true },
-            { type: 'start_listening' },
-            { type: 'user_response_shown', content: 'I communicated the risk by framing it in terms of business impact, specifically a potential 48-hour delay, instead of technical jargon. I presented two options: the microservice fix with the delay, or a higher-risk, rushed migration. They opted for the safer, delayed path.' },
-            { type: 'processing_response' },
-            { type: 'ai_question', content: "Great. Moving to question number two: Your resume highlights strong experience in JavaScript and Python. Which of these languages do you believe is better suited for building scalable, high-performance back-end systems, and why?", speak: true, questionNumber: 2 },
-            { type: 'start_listening' },
-            { type: 'user_response_shown', content: 'For scalable, high-performance back-end systems, I lean toward Python, specifically using frameworks like FastAPI or Django, mainly because of the vast ecosystem of scientific and data libraries. However, Node.js (JavaScript) offers superior I/O performance due to its non-blocking event loop, which is critical for I/O bound tasks like microservices.' },
-            { type: 'processing_response' },
-            { type: 'ai_conversational_response', content: 'That’s a nuanced answer. It sounds like you value Python’s ecosystem but recognize Node.js’s I/O strengths. Can you give me a recent example where you had to prioritize one over the other for a production system?', speak: true },
-            { type: 'start_listening' },
-            { type: 'user_response_shown', content: 'We built a data processing pipeline that was heavily CPU bound, involving complex matrix calculations. We chose Python with NumPy for that part. For the API gateway, which was purely I/O bound, we used Node.js. It was a polyglot system to leverage the strengths of both.' },
-            { type: 'processing_response' },
-            { type: 'ai_question', content: "Excellent strategy. Final question for today (Question 3 of 3): Describe a time you received constructive criticism that drastically changed how you approached your work. What was the criticism, and what did you change?", speak: true, questionNumber: 3 },
-            { type: 'start_listening' },
-            { type: 'user_response_shown', content: 'The criticism was about my tendency to over-engineer solutions, making them technically beautiful but difficult for my teammates to maintain. I was told, "Perfect is the enemy of done." I changed my approach by introducing a mandatory design review stage focused solely on simplicity and maintainability, ensuring I built for the team, not just for myself.' },
-            { type: 'processing_response' },
-            { type: 'ai_conversational_response', content: 'That’s a very insightful takeaway. Thank you for sharing your thoughtful answers. I have enough information to proceed with the evaluation.', speak: true },
-            { type: 'interview_completed', content: 'Thank you for participating in this conversational interview. Please click "End Interview" to view your final transcript and details.' }
-        ];
-        
-        // This function simulates the behavior of a real-time WebSocket connection
-        function setupMockWebSocket() {
-            let mockIndex = 0;
+        function setupWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/${sessionId}`;
 
-            // Simulate immediate message flow for the introduction
-            setTimeout(() => {
-                // Send first message immediately
-                handleWebSocketMessage({ data: JSON.stringify(mockMessageQueue[mockIndex++]) });
-            }, 500);
+            websocket = new WebSocket(wsUrl);
 
-            // Mock the next question button click/AI state transition
-            elements.nextQuestion.onclick = () => {
-                if (currentUtterance) speechSynthesis.cancel(); // Stop AI speech if interrupted
-                // Check if the current listening state is waiting for the next user response
-                while (mockIndex < mockMessageQueue.length && mockMessageQueue[mockIndex].type !== 'ai_question' && mockMessageQueue[mockIndex].type !== 'interview_completed') {
-                    mockIndex++;
-                }
-                
-                if (mockIndex < mockMessageQueue.length) {
-                    handleWebSocketMessage({ data: JSON.stringify(mockMessageQueue[mockIndex++]) });
-                }
+            websocket.onopen = () => {
+                console.log('🔗 WebSocket connected - starting conversational interview');
+                updateConversationStatus('✅ Connected to AI interviewer', 'The conversation is about to begin');
             };
-            
-            // This function is the core mock for sending the response
-            async function sendMockResponse() {
-                if (currentUtterance) speechSynthesis.cancel(); // Stop any current AI speech
-                
-                // Simulate the immediate transition to processing
-                handleWebSocketMessage({ data: JSON.stringify({ type: 'processing_response' }) });
 
-                // Find the next sequence of messages: user response -> processing -> ai response/question
-                // We'll advance the index three times to skip the user message and processing step
-                const userResponse = mockMessageQueue[mockIndex++];
-                const processing = mockMessageQueue[mockIndex++];
-                const aiResponse = mockMessageQueue[mockIndex++];
+            websocket.onmessage = handleWebSocketMessage;
 
-                // Wait for a mock processing time (1.5 seconds)
-                await new Promise(resolve => setTimeout(resolve, 1500)); 
+            websocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateConversationStatus('❌ Connection error', 'Please refresh the page');
+                addMessage('system', 'Connection error. Please refresh the page and try again.');
+            };
 
-                // Send the mock user response back to the client
-                handleWebSocketMessage({ data: JSON.stringify(userResponse) });
-
-                // Send the mock AI response/question to the client
-                await new Promise(resolve => setTimeout(resolve, 500));
-                handleWebSocketMessage({ data: JSON.stringify(aiResponse) });
-
-                // If the next logical state is listening, send it
-                if (mockIndex < mockMessageQueue.length && (mockMessageQueue[mockIndex].type === 'start_listening' || mockMessageQueue[mockIndex].type === 'continue_listening')) {
-                    handleWebSocketMessage({ data: JSON.stringify(mockMessageQueue[mockIndex++]) });
-                }
-            }
-            
-            // Re-map the actual audio sending function to the mock function
-            window.sendAudioResponse = sendMockResponse;
+            websocket.onclose = () => {
+                console.log('WebSocket closed');
+                updateConversationStatus('🔌 Connection closed', 'Interview session ended');
+            };
         }
-        
-        // Use the mock function in the stopRecording to trigger the conversation flow
-        async function sendAudioResponse(audioBlob) {
-            // Placeholder for the original function; now pointing to the mock
-            window.sendAudioResponse(); 
-        }
-        // --- END MOCK WEBSOCKET & CONVERSATION LOGIC ---
 
         function handleWebSocketMessage(event) {
-            // Note: The mock flow provides the `data` object directly
             const data = JSON.parse(event.data);
             console.log('📨 Received:', data.type, 'State:', data.state);
 
@@ -1127,14 +977,7 @@
                     updateVoiceInterface('🗣️ AI is speaking...', 'ai_speaking', 'The AI interviewer is talking');
 
                     if (data.speak) {
-                        // Stop any previous speech before starting a new one
-                        if (currentUtterance) speechSynthesis.cancel();
-                        speakText(data.content, () => {
-                            // After AI finishes speaking, check the mock queue for the next state (usually 'start_listening')
-                            if (mockMessageQueue[mockIndex] && mockMessageQueue[mockIndex].type.endsWith('listening')) {
-                                handleWebSocketMessage({ data: JSON.stringify(mockMessageQueue[mockIndex++]) });
-                            }
-                        });
+                        speakText(data.content);
                     }
 
                     if (data.questionNumber) {
@@ -1144,14 +987,18 @@
                     break;
 
                 case 'start_listening':
-                case 'continue_listening':
-                case 'resume_listening':
                     conversationState = 'listening_for_answer';
                     updateConversationStatus('👂 AI is listening for your response', 'Hold the record button and speak your answer');
                     updateVoiceInterface('👂 Listening for your response...', 'listening_for_answer', 'Hold the record button to speak');
                     elements.recordButton.disabled = false;
                     elements.recordInstructions.textContent = 'Hold the button and speak your answer';
-                    removeThinkingIndicator();
+                    break;
+
+                case 'continue_listening':
+                    conversationState = 'listening_for_answer';
+                    updateConversationStatus('👂 AI is still listening', 'You can continue speaking or move to next question');
+                    updateVoiceInterface('👂 Continue speaking or next question...', 'listening_for_answer', 'AI is ready for more or next question');
+                    elements.recordButton.disabled = false;
                     break;
 
                 case 'processing_response':
@@ -1173,14 +1020,21 @@
                     updateVoiceInterface('🗣️ AI is responding...', 'ai_responding', 'AI is having a conversation with you');
 
                     if (data.speak) {
-                        if (currentUtterance) speechSynthesis.cancel();
-                        speakText(data.content, () => {
-                            // After conversational response, move to next state (usually continue_listening or ask_question)
-                            if (mockMessageQueue[mockIndex]) {
-                                handleWebSocketMessage({ data: JSON.stringify(mockMessageQueue[mockIndex++]) });
-                            }
-                        });
+                        speakText(data.content);
                     }
+                    break;
+
+                case 'ask_repeat':
+                    addMessage('ai', data.content);
+                    if (data.speak) {
+                        speakText(data.content);
+                    }
+                    break;
+
+                case 'resume_listening':
+                    conversationState = 'listening_for_answer';
+                    updateVoiceInterface('👂 Listening again...', 'listening_for_answer', 'Please try speaking again');
+                    elements.recordButton.disabled = false;
                     break;
 
                 case 'interview_completed':
@@ -1190,12 +1044,10 @@
                     updateVoiceInterface('✅ Interview finished', 'idle', 'Conversation complete');
 
                     if (data.speak) {
-                        if (currentUtterance) speechSynthesis.cancel();
                         speakText(data.content);
                     }
 
                     elements.recordButton.disabled = true;
-                    removeThinkingIndicator();
 
                     setTimeout(() => {
                         currentStep = 4;
@@ -1274,11 +1126,8 @@
             }
         }
 
-        function speakText(text, onendCallback) {
-            if (!text) {
-                if(onendCallback) onendCallback();
-                return;
-            }
+        function speakText(text) {
+            if (!text) return;
 
             // Stop any current speech
             speechSynthesis.cancel();
@@ -1301,12 +1150,10 @@
 
             currentUtterance.onend = () => {
                 console.log('🔊 AI finished speaking');
-                if (onendCallback) onendCallback();
             };
 
             currentUtterance.onerror = (error) => {
                 console.error('Speech error:', error);
-                if (onendCallback) onendCallback();
             };
 
             speechSynthesis.speak(currentUtterance);
@@ -1315,11 +1162,6 @@
         async function startRecording() {
             if (isRecording || !audioStream || conversationState !== 'listening_for_answer') {
                 return;
-            }
-            
-            // Cancel any AI speech synthesis if it's still talking (user interrupts)
-            if (speechSynthesis.speaking) {
-                speechSynthesis.cancel();
             }
 
             try {
@@ -1338,8 +1180,7 @@
                 mediaRecorder.onstop = async () => {
                     if (audioChunks.length > 0) {
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        // Call the mock function instead of the real sendAudioResponse
-                        await sendAudioResponse(audioBlob); 
+                        await sendAudioResponse(audioBlob);
                     }
                 };
 
@@ -1365,15 +1206,30 @@
                 mediaRecorder.stop();
             }
         }
-        
-        // This is a placeholder/mock of the original function's purpose
-        // The mock logic for sending the response is now inside setupMockWebSocket
-        // The original code has been updated above to call the mock logic.
-        /*
+
         async function sendAudioResponse(audioBlob) {
-            // ... original websocket audio sending logic ...
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            try {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const audioData = reader.result.split(',')[1];
+
+                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        websocket.send(JSON.stringify({
+                            type: 'audio_response',
+                            content: audioData
+                        }));
+                        console.log('📤 Sent audio response to server');
+                    }
+                };
+                reader.readAsDataURL(audioBlob);
+            } catch (error) {
+                console.error('Failed to send audio response:', error);
+            }
         }
-        */
 
         function updateConversationStatus(indicator, description) {
             elements.statusIndicator.textContent = indicator;
@@ -1397,51 +1253,25 @@
         }
 
         function handleNextQuestion() {
-            // In the mock, this advances the mock index until the next question or completion
-            if (currentUtterance) speechSynthesis.cancel();
-            
-            // Only proceed if not already processing
-            if (conversationState !== 'processing_answer') {
-                // Mock the server call
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify({ type: 'next_question' }));
                 elements.recordButton.disabled = true;
                 elements.recordInstructions.textContent = 'Moving to next question...';
-
-                // Skip any intervening conversational responses
-                while (mockIndex < mockMessageQueue.length && mockMessageQueue[mockIndex].type !== 'ai_question' && mockMessageQueue[mockIndex].type !== 'interview_completed') {
-                    mockIndex++;
-                }
-
-                if (mockIndex < mockMessageQueue.length) {
-                    handleWebSocketMessage({ data: JSON.stringify(mockMessageQueue[mockIndex++]) });
-                } else {
-                    // Force completion if 'Next Question' is pressed at the end
-                    handleEndInterview(true);
-                }
             }
         }
 
-        function handleEndInterview(force = false) {
-            if (force || confirm('End the interview? Your conversation will be saved.')) {
-                // Stop any AI speech
-                if (currentUtterance) speechSynthesis.cancel(); 
-                
-                // Set final stats and move to step 4
-                currentStep = 4;
-                updateProgress();
-                showResults();
-
-                // Close resources
-                if (websocket) websocket.close();
-                if (audioStream) {
-                    audioStream.getTracks().forEach(track => track.stop());
+        function handleEndInterview() {
+            if (confirm('End the interview? Your conversation will be saved.')) {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    websocket.send(JSON.stringify({ type: 'end_interview' }));
                 }
+                elements.recordButton.disabled = true;
             }
         }
 
         function startTimer() {
             startTime = Date.now();
-            // Use a variable to store the interval ID
-            window.timerInterval = setInterval(() => {
+            setInterval(() => {
                 if (startTime) {
                     const elapsed = Date.now() - startTime;
                     const minutes = Math.floor(elapsed / 60000);
@@ -1452,9 +1282,6 @@
         }
 
         function showResults() {
-            // Stop the timer
-            if (window.timerInterval) clearInterval(window.timerInterval);
-            
             const finalDuration = elements.timer.textContent;
             const responseCount = document.querySelectorAll('.message.user').length;
 
@@ -1463,12 +1290,11 @@
             document.getElementById('responseCount').textContent = responseCount;
 
             const finalTranscript = document.getElementById('finalTranscript');
-            // Clone the HTML content of the conversation area
-            finalTranscript.innerHTML = elements.conversationArea.innerHTML; 
-            
-            // Remove the temporary thinking indicator if it was cloned
-            const thinkingOnResults = finalTranscript.querySelector('.thinking-indicator');
-            if (thinkingOnResults) thinkingOnResults.remove();
+            finalTranscript.innerHTML = elements.conversationArea.innerHTML;
+
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+            }
         }
 
         function downloadTranscript() {
@@ -1480,12 +1306,11 @@
 
             messages.forEach(message => {
                 const header = message.querySelector('.message-header');
-                const content = message.querySelector('.message-content').textContent.trim();
+                const content = message.querySelector('.message-content').textContent;
 
                 if (header) {
-                    transcript += `${header.textContent}: ${content}\n\n`;
+                    transcript += `${header.textContent}\n${content}\n\n`;
                 } else {
-                    // System messages (like connecting/errors)
                     transcript += `System: ${content}\n\n`;
                 }
             });
@@ -1509,9 +1334,6 @@
             if (websocket) websocket.close();
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
-            }
-            if (currentUtterance) {
-                speechSynthesis.cancel();
             }
         });
     </script>
