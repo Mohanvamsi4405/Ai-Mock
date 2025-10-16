@@ -534,14 +534,133 @@
 
         .hidden { display: none !important; }
 
+        /* New Report Styles */
+        .report-card {
+            margin-top: 30px;
+            margin-bottom: 30px;
+            padding: 30px;
+            border-radius: var(--radius);
+            border: 3px solid var(--border);
+            background: #f0f4f8; /* Light blue/gray background */
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .report-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .overall-score {
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        .recommendation {
+            font-size: 1.3rem;
+            font-weight: 700;
+            padding: 10px 20px;
+            border-radius: var(--radius);
+            margin-top: 15px;
+        }
+
+        .recommendation.recommended {
+            background: var(--success);
+            color: white;
+        }
+
+        .recommendation.not-recommended {
+            background: var(--danger);
+            color: white;
+        }
+
+        .evaluation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .category-item {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: var(--radius);
+            border-left: 5px solid var(--primary);
+            box-shadow: var(--shadow);
+        }
+
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .category-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .category-score {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--success); /* Base score color */
+        }
+        
+        .category-comment {
+            font-style: italic;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        /* Media Queries (already well-handled) */
         @media (max-width: 768px) {
             .container { padding: 15px; }
             .header h1 { font-size: 2rem; }
             .conversation-flow { flex-direction: column; gap: 15px; }
-            .steps { grid-template-columns: 1fr; }
             .voice-indicator { width: 80px; height: 80px; font-size: 2rem; }
-            .controls { flex-direction: column; align-items: center; }
             .conversation-area { height: 350px; }
+            
+            /* Allow stats to wrap better */
+            .stats { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+            .stat { padding: 15px 10px; }
+            .stat-value { font-size: 1.5rem; }
+        }
+        
+        @media (max-width: 640px) {
+            .container { padding: 10px; }
+            .header { padding: 30px 15px; margin-bottom: 20px; }
+            .header h1 { font-size: 1.8rem; }
+            .header p { font-size: 0.9rem; }
+            
+            /* Stack steps clearly */
+            .steps { grid-template-columns: 1fr; gap: 10px; }
+
+            /* Make buttons full width for better touch targets */
+            .controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .controls .btn {
+                width: 100%;
+                text-align: center;
+                justify-content: center;
+            }
+            
+            /* Tweak content sizes */
+            .content-section { padding: 20px; }
+            .upload-area { padding: 40px 15px; }
+            .message { max-width: 95%; }
+            .message.system { max-width: 90%; }
+            
+            /* Shorter conversation history to leave space for mic button */
+            .conversation-area { height: 300px; padding: 15px; } 
+            
+            .record-button {
+                width: 70px;
+                height: 70px;
+                font-size: 1.8rem;
+            }
         }
     </style>
 </head>
@@ -578,7 +697,6 @@
             </div>
         </div>
 
-        <!-- Step 1: Resume Upload -->
         <div class="content-section active" id="section1">
             <h2>📄 Upload Your Resume</h2>
             <p>Upload your PDF resume for personalized interview questions.</p>
@@ -593,7 +711,6 @@
             <div id="uploadResult"></div>
         </div>
 
-        <!-- Step 2: Interview Setup -->
         <div class="content-section" id="section2">
             <h2>💼 Interview Setup</h2>
             <p>Provide job details for targeted questions (optional).</p>
@@ -615,7 +732,6 @@
             </div>
         </div>
 
-        <!-- Step 3: AI Conversation -->
         <div class="content-section" id="section3">
             <h2>💬 AI Interview Conversation</h2>
 
@@ -647,9 +763,6 @@
                 </div>
 
                 <div class="conversation-area" id="conversationArea">
-                    <div class="message system">
-                        <div class="message-content">Connecting to your AI interviewer...</div>
-                    </div>
                 </div>
 
                 <button class="record-button" id="recordButton" disabled>🎤</button>
@@ -664,10 +777,9 @@
             </div>
         </div>
 
-        <!-- Step 4: Results -->
         <div class="content-section" id="section4">
             <h2>📊 Interview Complete!</h2>
-            <p>Your conversational interview has ended successfully.</p>
+            <p>Your conversational interview has ended successfully. Review the AI's final evaluation.</p>
 
             <div class="stats">
                 <div class="stat">
@@ -683,9 +795,12 @@
                     <div class="stat-label">Responses Given</div>
                 </div>
             </div>
+            
+            <div id="reportContainer">
+            </div>
 
+            <h3>Full Transcript:</h3>
             <div class="conversation-area" id="finalTranscript">
-                <!-- Final transcript -->
             </div>
 
             <div class="controls">
@@ -705,10 +820,12 @@
         let isRecording = false;
         let conversationState = 'idle'; // idle, ai_speaking, listening_for_answer, processing_answer
         let startTime = null;
+        let timerInterval = null; 
         let currentQuestionNum = 1;
         let totalQuestionsNum = 4;
         let speechSynthesis = window.speechSynthesis;
         let currentUtterance = null;
+        let finalReport = null;
 
         // DOM elements
         const elements = {
@@ -730,7 +847,8 @@
             endInterview: document.getElementById('endInterview'),
             currentQuestion: document.getElementById('currentQuestion'),
             totalQuestions: document.getElementById('totalQuestions'),
-            timer: document.getElementById('timer')
+            timer: document.getElementById('timer'),
+            reportContainer: document.getElementById('reportContainer')
         };
 
         // Initialize app
@@ -738,6 +856,8 @@
             setupEventListeners();
             setupDragAndDrop();
             updateProgress();
+            // Ensure initial conversation area is clean (remove placeholder system message)
+            elements.conversationArea.innerHTML = ''; 
             console.log('🎤 Conversational AI interview system initialized');
         }
 
@@ -762,7 +882,8 @@
 
             elements.nextQuestion.addEventListener('click', handleNextQuestion);
             elements.endInterview.addEventListener('click', handleEndInterview);
-            document.getElementById('downloadTranscript')?.addEventListener('click', downloadTranscript);
+            // Must check if elements exist since they are in Step 4
+            document.getElementById('downloadTranscript')?.addEventListener('click', downloadTranscript); 
             document.getElementById('newInterview')?.addEventListener('click', () => location.reload());
         }
 
@@ -837,28 +958,32 @@
 
             const formData = new FormData();
             formData.append('file', file);
-
+            
             try {
-                const response = await fetch('/upload-resume', {
-                    method: 'POST',
-                    body: formData
+                // *** REAL API CALL TO BACKEND: /upload-resume ***
+                const response = await fetch('/upload-resume', { 
+                    method: 'POST', 
+                    body: formData 
                 });
-
+                
                 const result = await response.json();
 
-                if (result.success) {
-                    sessionId = result.sessionId;
-                    showAlert(`✅ <strong>Resume processed successfully!</strong><br>
-                        📊 Skills found: ${result.parsedContent.skills.slice(0, 8).join(', ')}<br>
-                        📝 Experience entries: ${result.parsedContent.experience.length}`, 'success');
-
-                    setTimeout(() => {
-                        currentStep = 2;
-                        updateProgress();
-                    }, 2000);
-                } else {
-                    showAlert(result.message || 'Failed to process resume', 'error');
+                if (!response.ok || !result.success) {
+                    throw new Error(result.detail || result.message || 'Upload failed due to server error.');
                 }
+                
+                // Use real result data here
+                sessionId = result.sessionId;
+
+                showAlert(`✅ <strong>Resume processed successfully!</strong><br>
+                    📊 Skills found: ${result.parsedContent.skills.slice(0, 4).join(', ')}...<br>
+                    📝 Experience entries: ${result.parsedContent.experience.length}`, 'success');
+
+                setTimeout(() => {
+                    currentStep = 2;
+                    updateProgress();
+                }, 2000);
+
             } catch (error) {
                 showAlert('Upload failed: ' + error.message, 'error');
             }
@@ -866,7 +991,7 @@
 
         async function handleSetupInterview() {
             if (!sessionId) {
-                showAlert('Please upload a resume first.', 'error');
+                showAlert('Please upload a resume first, or the interview will not be personalized.', 'warning');
                 return;
             }
 
@@ -876,41 +1001,53 @@
             const requestData = { session_id: sessionId };
             if (jobRole || jobDescription) {
                 requestData.job_description = {
-                    role: jobRole || 'General Position',
+                    role: jobRole || 'General Technical Role',
                     text: jobDescription || 'General interview questions'
                 };
+            } else {
+                // Send an empty job description if both fields are empty but keep the job role structure
+                 requestData.job_description = {
+                    role: 'General Technical Role',
+                    text: ''
+                };
             }
-
+            
             try {
+                // *** REAL API CALL TO BACKEND: /setup-interview ***
                 const response = await fetch('/setup-interview', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(requestData)
                 });
-
+                
                 const result = await response.json();
 
-                if (result.success) {
-                    totalQuestionsNum = result.questions.length;
-                    elements.totalQuestions.textContent = totalQuestionsNum;
-
-                    showAlert(`✅ <strong>Generated ${result.questions.length} conversational questions!</strong><br>
-                        🎯 Ready to start your AI conversation where the AI asks AND listens!`, 'success');
-
-                    setTimeout(async () => {
-                        currentStep = 3;
-                        updateProgress();
-                        await startConversationalInterview();
-                    }, 2500);
-                } else {
-                    showAlert(result.message || 'Failed to setup interview', 'error');
+                if (!response.ok || !result.success) {
+                    throw new Error(result.detail || result.message || 'Setup failed.');
                 }
+                
+                // Use real result data here
+                totalQuestionsNum = result.questions.length;
+                elements.totalQuestions.textContent = totalQuestionsNum;
+
+                showAlert(`✅ <strong>Generated ${result.questions.length} conversational questions!</strong><br>
+                    🎯 Ready to start your AI conversation where the AI asks AND listens!`, 'success');
+
+                setTimeout(async () => {
+                    currentStep = 3;
+                    updateProgress();
+                    await startConversationalInterview();
+                }, 2500);
+
             } catch (error) {
                 showAlert('Setup failed: ' + error.message, 'error');
             }
         }
 
         function handleSkipJobDescription() {
+            // Fill with default values and call setup
+            document.getElementById('jobRole').value = 'General Technical Role';
+            document.getElementById('jobDescription').value = '';
             handleSetupInterview();
         }
 
@@ -918,6 +1055,7 @@
             if (!sessionId) return;
 
             updateConversationStatus('🔗 Requesting microphone access...', 'Please allow microphone access for the conversation');
+            elements.conversationArea.innerHTML = '<div class="message system"><div class="message-content">Requesting microphone access...</div></div>';
 
             try {
                 // Get microphone access
@@ -935,20 +1073,27 @@
 
             } catch (error) {
                 console.error('Microphone access denied:', error);
-                showAlert('Microphone access is required for voice conversation. Please allow access and refresh.', 'error');
-                updateConversationStatus('❌ Microphone access denied', 'Please refresh and allow microphone access');
+                const errMsg = 'Microphone access is required for voice conversation. Please allow access and refresh.';
+                showAlert(errMsg, 'error');
+                updateConversationStatus('❌ Microphone access denied', errMsg);
+                addMessage('system', '❌ ' + errMsg);
+                // CRITICAL FIX: Ensure the button remains disabled if mic access failed.
+                elements.recordButton.disabled = true; 
             }
         }
 
         function setupWebSocket() {
+            // *** REAL WEB SOCKET INTEGRATION ***
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/${sessionId}`;
 
             websocket = new WebSocket(wsUrl);
 
             websocket.onopen = () => {
-                console.log('🔗 WebSocket connected - starting conversational interview');
-                updateConversationStatus('✅ Connected to AI interviewer', 'The conversation is about to begin');
+                console.log('🔗 WebSocket connected - waiting for first question');
+                elements.conversationArea.innerHTML = ''; // Clear initial system message
+                addMessage('system', '✅ Connection established. AI interviewer is joining the session...');
+                updateConversationStatus('✅ Connected', 'The AI interviewer will ask the first question shortly.');
             };
 
             websocket.onmessage = handleWebSocketMessage;
@@ -956,12 +1101,14 @@
             websocket.onerror = (error) => {
                 console.error('WebSocket error:', error);
                 updateConversationStatus('❌ Connection error', 'Please refresh the page');
-                addMessage('system', 'Connection error. Please refresh the page and try again.');
+                addMessage('system', '❌ Fatal connection error. Please refresh the page.');
+                stopTimer(); 
             };
 
             websocket.onclose = () => {
                 console.log('WebSocket closed');
                 updateConversationStatus('🔌 Connection closed', 'Interview session ended');
+                stopTimer(); 
             };
         }
 
@@ -969,15 +1116,26 @@
             const data = JSON.parse(event.data);
             console.log('📨 Received:', data.type, 'State:', data.state);
 
+            // FIX: Cancel speaking only for messages that override the current AI turn (like errors or repetitions)
+            if (speechSynthesis.speaking && data.type !== 'ai_conversational_response' && data.type !== 'ai_question') {
+                 speechSynthesis.cancel();
+            }
+
             switch (data.type) {
-                case 'ai_message':
                 case 'ai_question':
+                case 'ai_conversational_response':
                     conversationState = 'ai_speaking';
                     addMessage('ai', data.content);
                     updateVoiceInterface('🗣️ AI is speaking...', 'ai_speaking', 'The AI interviewer is talking');
 
                     if (data.speak) {
-                        speakText(data.content);
+                        // FIX: Pass a callback to send 'speech_finished' only after TTS ends
+                        speakText(data.content, () => {
+                            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                                websocket.send(JSON.stringify({ type: 'speech_finished' }));
+                                console.log('🔊 Sent speech_finished signal to server.');
+                            }
+                        });
                     }
 
                     if (data.questionNumber) {
@@ -987,18 +1145,16 @@
                     break;
 
                 case 'start_listening':
+                case 'continue_listening': 
+                case 'resume_listening':
                     conversationState = 'listening_for_answer';
                     updateConversationStatus('👂 AI is listening for your response', 'Hold the record button and speak your answer');
                     updateVoiceInterface('👂 Listening for your response...', 'listening_for_answer', 'Hold the record button to speak');
-                    elements.recordButton.disabled = false;
+                    // CRITICAL FIX: Enable button only if we have the audio stream
+                    if (audioStream) {
+                        elements.recordButton.disabled = false;
+                    }
                     elements.recordInstructions.textContent = 'Hold the button and speak your answer';
-                    break;
-
-                case 'continue_listening':
-                    conversationState = 'listening_for_answer';
-                    updateConversationStatus('👂 AI is still listening', 'You can continue speaking or move to next question');
-                    updateVoiceInterface('👂 Continue speaking or next question...', 'listening_for_answer', 'AI is ready for more or next question');
-                    elements.recordButton.disabled = false;
                     break;
 
                 case 'processing_response':
@@ -1013,35 +1169,15 @@
                     removeThinkingIndicator();
                     console.log('👤 User said:', data.content);
                     break;
-
-                case 'ai_conversational_response':
-                    conversationState = 'ai_speaking';
-                    addMessage('ai', data.content);
-                    updateVoiceInterface('🗣️ AI is responding...', 'ai_responding', 'AI is having a conversation with you');
-
-                    if (data.speak) {
-                        speakText(data.content);
-                    }
-                    break;
-
-                case 'ask_repeat':
-                    addMessage('ai', data.content);
-                    if (data.speak) {
-                        speakText(data.content);
-                    }
-                    break;
-
-                case 'resume_listening':
-                    conversationState = 'listening_for_answer';
-                    updateVoiceInterface('👂 Listening again...', 'listening_for_answer', 'Please try speaking again');
-                    elements.recordButton.disabled = false;
-                    break;
-
+                
                 case 'interview_completed':
                     conversationState = 'completed';
                     addMessage('ai', data.content);
                     updateConversationStatus('🎉 Interview completed!', 'The AI has finished asking questions');
                     updateVoiceInterface('✅ Interview finished', 'idle', 'Conversation complete');
+                    stopTimer(); 
+                    
+                    finalReport = data.report; 
 
                     if (data.speak) {
                         speakText(data.content);
@@ -1060,6 +1196,13 @@
                     console.error('Server error:', data.message);
                     addMessage('system', '❌ Error: ' + data.message);
                     updateConversationStatus('❌ Error occurred', data.message);
+                    
+                    // Attempt to resume listening if not an unrecoverable error
+                    if (data.state === 'listening_for_answer' || data.type === 'ask_repeat') { 
+                        setTimeout(() => {
+                             handleWebSocketMessage({ data: JSON.stringify({ type: 'resume_listening', state: 'listening_for_answer' }) });
+                        }, 2000);
+                    }
                     break;
             }
         }
@@ -1083,9 +1226,11 @@
             }
 
             if (type !== 'system') {
+                // Ensure content is safe for innerHTML, especially since it's LLM-generated and might have markdown
+                const finalContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
                 messageDiv.innerHTML = `
                     <div class="message-header">${icon} ${sender}</div>
-                    <div class="message-content">${content}</div>
+                    <div class="message-content">${finalContent}</div>
                 `;
             } else {
                 messageDiv.innerHTML = `
@@ -1126,8 +1271,12 @@
             }
         }
 
-        function speakText(text) {
-            if (!text) return;
+        // FIX: Added optional callback for synchronization
+        function speakText(text, callback = null) {
+            if (!text) {
+                if (callback) callback();
+                return;
+            }
 
             // Stop any current speech
             speechSynthesis.cancel();
@@ -1150,15 +1299,23 @@
 
             currentUtterance.onend = () => {
                 console.log('🔊 AI finished speaking');
+                // CRITICAL FIX: Trigger the callback to notify the server to start listening
+                if (callback) {
+                    callback();
+                }
             };
 
             currentUtterance.onerror = (error) => {
                 console.error('Speech error:', error);
+                // If speech fails (e.g., voice not found), still notify the server to continue flow
+                if (callback) {
+                    callback();
+                }
             };
 
             speechSynthesis.speak(currentUtterance);
         }
-
+        
         async function startRecording() {
             if (isRecording || !audioStream || conversationState !== 'listening_for_answer') {
                 return;
@@ -1178,9 +1335,11 @@
                 };
 
                 mediaRecorder.onstop = async () => {
+                    // *** REAL AUDIO SEND LOGIC ***
                     if (audioChunks.length > 0) {
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        await sendAudioResponse(audioBlob);
+                        // Send the audio blob to the backend via WebSocket
+                        await sendAudioResponse(audioBlob); 
                     }
                 };
 
@@ -1204,20 +1363,24 @@
 
             if (mediaRecorder && mediaRecorder.state === 'recording') {
                 mediaRecorder.stop();
+                // The mediaRecorder.onstop event handles calling sendAudioResponse
             }
         }
 
         async function sendAudioResponse(audioBlob) {
             if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-                return;
+                 console.error("WebSocket is not open or initialized. Cannot send audio.");
+                 return;
             }
 
             try {
                 const reader = new FileReader();
                 reader.onloadend = () => {
+                    // Extract base64 audio data
                     const audioData = reader.result.split(',')[1];
 
                     if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        // Send the base64 audio to the backend for transcription and response generation
                         websocket.send(JSON.stringify({
                             type: 'audio_response',
                             content: audioData
@@ -1229,6 +1392,7 @@
             } catch (error) {
                 console.error('Failed to send audio response:', error);
             }
+            
         }
 
         function updateConversationStatus(indicator, description) {
@@ -1246,32 +1410,51 @@
                 ai_speaking: '🗣️',
                 listening_for_answer: '👂',
                 processing_answer: '⚙️',
-                ai_responding: '💬'
+                ai_responding: '💬',
+                completed: '✅'
             };
 
             elements.voiceIndicator.textContent = icons[state] || '🎤';
         }
 
         function handleNextQuestion() {
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({ type: 'next_question' }));
-                elements.recordButton.disabled = true;
-                elements.recordInstructions.textContent = 'Moving to next question...';
+            // Send request to backend to move to the next structured question
+            if (websocket && websocket.readyState === WebSocket.OPEN && conversationState !== 'processing_answer') {
+                 websocket.send(JSON.stringify({ type: 'next_question' }));
+                 elements.recordButton.disabled = true;
+                 elements.recordInstructions.textContent = 'Moving to next question...';
             }
         }
 
         function handleEndInterview() {
-            if (confirm('End the interview? Your conversation will be saved.')) {
+            // Use a custom modal for confirmation instead of alert()
+            const confirmEnd = window.confirm ? window.confirm('End the interview? Your conversation will be saved.') : true; 
+
+            if (confirmEnd) {
+                stopTimer(); // <-- FIX: Stop the timer immediately
+                // Send request to backend to end the interview
                 if (websocket && websocket.readyState === WebSocket.OPEN) {
                     websocket.send(JSON.stringify({ type: 'end_interview' }));
                 }
                 elements.recordButton.disabled = true;
+                
+                // If WebSocket is already closed or fails to send, ensure we transition to results
+                if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                    // Simulate completion transition if the socket is already gone
+                    setTimeout(() => {
+                        currentStep = 4;
+                        updateProgress();
+                        showResults();
+                    }, 500); 
+                }
             }
         }
 
         function startTimer() {
+            if (timerInterval) clearInterval(timerInterval); // Ensure previous timer is cleared
+            
             startTime = Date.now();
-            setInterval(() => {
+            timerInterval = setInterval(() => {
                 if (startTime) {
                     const elapsed = Date.now() - startTime;
                     const minutes = Math.floor(elapsed / 60000);
@@ -1279,6 +1462,14 @@
                     elements.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                 }
             }, 1000);
+        }
+        
+        function stopTimer() { // <-- Dedicated stop function
+             if (timerInterval) {
+                 clearInterval(timerInterval);
+                 timerInterval = null;
+                 console.log('⏱️ Timer stopped.');
+             }
         }
 
         function showResults() {
@@ -1290,15 +1481,69 @@
             document.getElementById('responseCount').textContent = responseCount;
 
             const finalTranscript = document.getElementById('finalTranscript');
+            // Copy the conversation area content
             finalTranscript.innerHTML = elements.conversationArea.innerHTML;
+            
+            // Remove system messages and thinking indicators from final transcript view
+            finalTranscript.querySelectorAll('.message.system').forEach(el => el.remove());
+            finalTranscript.querySelectorAll('.thinking-indicator').forEach(el => el.remove());
+
 
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
             }
+            
+            // Render the Final Report 
+            renderFinalReport(finalReport); 
+
+            // Re-render the final transcript content to ensure smooth scroll is reset
+            setTimeout(() => {
+                finalTranscript.scrollTop = 0;
+            }, 100);
+        }
+        
+        function renderFinalReport(report) {
+            if (!report) {
+                elements.reportContainer.innerHTML = '<div class="alert error">Could not load the final report data.</div>';
+                return;
+            }
+
+            const recommendationClass = report.recommendation.toLowerCase().includes('recommended') ? 'recommended' : 'not-recommended';
+            const scoreColor = score => {
+                if (score >= 8.0) return 'var(--success)';
+                if (score >= 6.0) return 'var(--warning)';
+                return 'var(--danger)';
+            };
+
+            let evaluationHtml = report.evaluation.map(cat => `
+                <div class="category-item">
+                    <div class="category-header">
+                        <span class="category-name">${cat.category}</span>
+                        <span class="category-score" style="color: ${scoreColor(cat.score)};">${cat.score.toFixed(1)} / 10</span>
+                    </div>
+                    <div class="category-comment">
+                        <em>"${cat.comment}"</em>
+                    </div>
+                </div>
+            `).join('');
+
+            elements.reportContainer.innerHTML = `
+                <div class="report-card">
+                    <div class="report-header">
+                        <h3>Final AI Evaluation (Score out of 10)</h3>
+                        <div class="overall-score" style="color: ${scoreColor(report.overallScore)};">${report.overallScore.toFixed(1)}</div>
+                        <div class="recommendation ${recommendationClass}">${report.recommendation}</div>
+                    </div>
+                    <div class="evaluation-grid">
+                        ${evaluationHtml}
+                    </div>
+                </div>
+            `;
         }
 
+
         function downloadTranscript() {
-            const messages = document.querySelectorAll('.message:not(.thinking-indicator)');
+            const messages = document.querySelectorAll('#finalTranscript .message:not(.thinking-indicator)');
             let transcript = 'Conversational AI Interview Transcript\n';
             transcript += '======================================\n\n';
             transcript += `Date: ${new Date().toLocaleDateString()}\n`;
@@ -1309,7 +1554,7 @@
                 const content = message.querySelector('.message-content').textContent;
 
                 if (header) {
-                    transcript += `${header.textContent}\n${content}\n\n`;
+                    transcript += `${header.textContent}: ${content}\n\n`;
                 } else {
                     transcript += `System: ${content}\n\n`;
                 }
@@ -1331,10 +1576,11 @@
 
         // Clean up on page unload
         window.addEventListener('beforeunload', () => {
-            if (websocket) websocket.close();
+            if (websocket) websocket.close(); // Close the real WebSocket connection
             if (audioStream) {
                 audioStream.getTracks().forEach(track => track.stop());
             }
+            stopTimer(); // Ensure timer stops
         });
     </script>
 </body>
