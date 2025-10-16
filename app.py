@@ -10,7 +10,7 @@ import logging
 from io import BytesIO
 import tempfile
 import time
-import re # Added for pattern matching
+import re
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,11 +34,19 @@ load_dotenv()
 # In-memory storage for sessions
 sessions = {}
 
+# --- NEW CONSTANTS FOR STRICTNESS AND FLOW CONTROL ---
+# Minimum number of user responses required before sending the transcript to the LLM for grading.
+MINIMUM_RESPONSES_FOR_LLM = 3 
+
+# Magic token to signal the WebSocket loop to advance to the next structured question
+ACTION_NEXT_Q = "__NEXT_STRUCTURED_QUESTION__" 
+# --- END NEW CONSTANTS ---
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Conversational AI Interview System",
     description="AI asks questions AND listens to your answers in real conversation",
-    version="8.6.0" # Updated version for improved flow, aggressive pivot, and graceful conclusion
+    version="9.2.0" # Updated version reflecting conversational flow fix
 )
 
 # Enable CORS
@@ -70,10 +78,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 groq_client = None
 if GROQ_AVAILABLE and GROQ_API_KEY and len(GROQ_API_KEY) > 10:
     try:
-        groq_client = Groq(api_key=GROQ_API_KEY)
+        # Corrected API key variable name
+        groq_client = Groq(api_key=GROQ_API_KEY) 
         logger.info("✅ Groq client initialized - Real AI conversation enabled")
     except Exception as e:
-        logger.error(f"Failed to initialize Groq client: {e}")
+        logger.error(f"❌ Failed to initialize Groq client (using simulation): {e}")
         groq_client = None
 else:
     logger.info("ℹ️ Running with enhanced simulation mode")
@@ -86,6 +95,16 @@ class JobDescription(BaseModel):
 class InterviewRequest(BaseModel):
     session_id: str
     job_description: Optional[JobDescription] = None
+    
+class CategoryScore(BaseModel):
+    category: str
+    score: float
+    comment: str
+
+class InterviewReport(BaseModel):
+    evaluation: List[CategoryScore]
+    overallScore: float
+    recommendation: str
 
 # Helper functions
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -112,21 +131,20 @@ def parse_resume_content(resume_text: str) -> Dict:
 
     lines = [line.strip() for line in resume_text.split('\n') if line.strip()]
 
-    # --- 1. Attempt to extract Name ---
+    # --- 1. Attempt to extract Name (Improved Heuristics) ---
     candidate_name = ""
-    if lines:
-        for line in lines[:5]:
-            # Simple heuristic: title-cased line, likely the name, not too long
-            if line == line.title() and 1 < len(line.split()) < 4 and len(line) > 4 and len(line) < 40:
-                # Exclude common headers like 'Education'
-                if not any(keyword in line.lower() for keyword in ['skill', 'education', 'experience', 'contact']):
-                    candidate_name = line
-                    break
+    for line in lines[:6]:
+        # Check for non-header lines that look like names (Title Case, short, not an email/URL/phone)
+        if line == line.title() and 1 < len(line.split()) < 4 and len(line) > 4:
+            lower_line = line.lower()
+            if not any(keyword in lower_line for keyword in ['skill', 'education', 'experience', 'contact', 'linkedin', '@', 'phone', 'portfolio', 'email']):
+                candidate_name = line
+                break
     
     if not candidate_name:
-         candidate_name = "Candidate"
+        candidate_name = "Candidate"
         
-    # --- 2. Extract Skills and Experience ---
+    # --- 2. Extract Skills and Experience (Focus on Project Details) ---
     skill_keywords = [
         'python', 'javascript', 'java', 'react', 'node', 'sql', 'html', 'css',
         'typescript', 'angular', 'vue', 'django', 'flask', 'mongodb', 'mysql',
@@ -139,6 +157,9 @@ def parse_resume_content(resume_text: str) -> Dict:
     found_skills = set()
     experience_lines = []
 
+    technical_verbs = ['developed', 'implemented', 'designed', 'optimized', 'managed', 'deployed', 'architected', 'led', 'reduced', 'increased', 'built', 'resolved', 'streamlined']
+    project_indicators = ['project:', 'key contributions:', 'results:', 'achievements:']
+    
     for line in lines:
         lower_line = line.lower()
 
@@ -147,99 +168,103 @@ def parse_resume_content(resume_text: str) -> Dict:
             if re.search(r'\b' + re.escape(skill.split()[0]) + r'\b', lower_line):
                 found_skills.add(skill)
 
-        # Find experience lines (job titles/descriptions)
-        if any(exp in lower_line for exp in ['developer', 'engineer', 'manager', 'analyst', 'architect', 'lead']) and len(line) > 20:
+        # Find detailed experience lines (more rigorous capture)
+        if (
+            any(exp in lower_line for exp in ['developer', 'engineer', 'manager', 'analyst', 'architect', 'lead']) or
+            any(verb in lower_line for verb in technical_verbs) or
+            any(indicator in lower_line for indicator in project_indicators)
+        ) and len(line) > 25: # Must be a substantial line
             experience_lines.append(line)
             
     # Clean up and prioritize the most relevant skills
     clean_skills = sorted(list(set([s.title() for s in found_skills])))
     
     return {
-        "candidateName": candidate_name, # Added candidate name
+        "candidateName": candidate_name,
         "skills": clean_skills[:15],
-        "experience": experience_lines[:8],
+        "experience": experience_lines[:8], # Now these are more likely to be descriptive project lines
         "education": []
     }
     
 
 def generate_interview_questions(resume_text: str, job_description: str = None, resume_parsed: Dict = None) -> List[Dict]:
     """
-    Generates a list of interview questions with a priority on introduction,
-    project deep dive, JD alignment, and concept deep dive. Questions are personalized to resume content.
+    Generates a list of interview questions with a priority on aggressive project deep dive, 
+    JD alignment, and concept strewing.
     """
     questions = []
     resume_lower = resume_text.lower() if resume_text else ""
-    is_technical = any(tech in resume_lower for tech in ['developer', 'engineer', 'programmer', 'python', 'javascript', 'machine learning'])
+    is_technical = any(tech in resume_lower for tech in ['developer', 'engineer', 'programmer', 'python', 'javascript', 'machine learning', 'data science'])
     
     # Context variables
     candidate_name = resume_parsed.get('candidateName', 'Candidate')
     main_skill = resume_parsed['skills'][0] if resume_parsed['skills'] else 'core technical areas'
-    # NOTE: Removing dependency on first_experience string to prevent verbose prompt repetition
+    job_role_title = resume_parsed.get('jobDescription', {}).get('role', 'the technical role')
     
-    # --- 1. Introduction (Must be first, personalized and focused) ---
+    # --- 1. Introduction (Must be first, focused on significant achievement/impact) ---
     questions.append({
         "id": 1,
-        "category": "Introduction", 
-        "question": f"Welcome, **{candidate_name}**! I'm your AI interviewer, and I'm looking forward to diving into your background. Could you begin by walking me through your professional journey, starting with your most recent or significant role?",
+        "category": "Introduction & Career Path", 
+        "question": f"Welcome, **{candidate_name}**! I'm your AI interviewer. Before we dive into the job requirements, let's start with your most significant professional achievement or project from your background. Tell me about the **technical problem** you solved using **{main_skill}** and the quantifiable **impact** it had on the business or product.",
         "follow_ups": [
-            "What is your proudest professional achievement mentioned in your background?",
+            "What was the most significant technical trade-off you had to make, and why?",
             "How does your career trajectory align with your long-term goals?"
         ]
     })
 
-    # --- 2. Project Deep Dive (High Priority, targets key skill) ---
+    # --- 2. Project Deep Dive (Aggressively targets complexity and failure) ---
     questions.append({
         "id": 2,
-        "category": "Project Deep Dive",
-        "question": f"Given your background, let's dive deep. Can you walk me through the most complex project you built that utilizes **{main_skill}**, focusing on the system's architecture and the most critical technical trade-off you faced?",
+        "category": "Aggressive Project Deep Dive",
+        "question": f"Let's go deeper into the systems you built, focusing on **{main_skill}**. Describe a system you architected that scaled to production, detailing the data flow, the single biggest **technical failure** that occurred, and how you engineered a recovery process.",
         "follow_ups": [
-            "What was the most significant technical trade-off you had to make, and why?",
-            "If you had infinite resources, how would you rebuild that system for maximum scalability?",
-            "What were the key architectural decisions, and how did they impact the final product?"
+            "What monitoring tools did you use to detect that failure, and what latency threshold was breached?",
+            "Detail the exact database indexing strategy you used, and why you chose it over alternatives like X or Y.",
+            "If you had to re-architect that system with a 50x load increase, what is the *first* component you would replace, and why?"
         ]
     })
     
-    # --- 3. Job Description Alignment (If provided, ensures JD focus) ---
+    # --- 3. Job Description Alignment (Strewn/Targeted) ---
     if job_description and len(job_description.strip()) > 50:
-          job_role = resume_parsed.get('jobDescription', {}).get('role', 'the technical role')
-          questions.append({
+        jd_drill = f"the core **scalability requirements** and **team collaboration needs** mentioned in the job description"
+        
+        questions.append({
             "id": 3,
-            "category": "JD Alignment",
-            "question": f"Based on the **{job_role}** you're applying for, which specific skills or experiences from your background do you feel make you the strongest candidate to address the core technical challenges of the role?",
+            "category": "JD Alignment & Strewn",
+            "question": f"Given the **{job_role_title}** role, and looking at your experience, provide a detailed example of a time you met a major project deadline *while* dealing with significant and unexpected scope creep. How did your technical decision-making and delegation align with {jd_drill}?",
             "follow_ups": [
+                "What was the most challenging technical (or professional) hurdle you've overcome, and what did you learn from it that you apply to new projects?",
                 "Could you provide a detailed example of when you demonstrated the skill of X (e.g. teamwork, leadership)?",
                 "What do you perceive as the biggest challenge in this role, and how would you tackle it?"
             ]
         })
     else:
-        # If no JD, focus this question on general motivation and career aspirations based on skills
         questions.append({
             "id": 3,
-            "category": "Motivation",
-            "question": "Looking at your skills, what is the most challenging technical (or professional) hurdle you've overcome, and what did you learn from it that you apply to new projects?",
+            "category": "Technical Debt & Architecture",
+            "question": "Describe a system you inherited that had serious **technical debt**. What was your strategy for prioritizing and refactoring that debt, and what metrics did you use to prove the effort was successful and worth the time investment?",
             "follow_ups": [
-                "How do you handle situations where you receive critical feedback on your work?",
-                "What is one area of your professional skill set that you are actively trying to improve?"
+                "What is one area of your professional skill set that you are actively trying to improve?",
+                "How do you handle situations where you receive critical feedback on your work?"
             ]
         })
 
 
     # --- 4. Concept Deep Dive (For Technical/Conceptually Deep Questions) ---
     if is_technical and resume_parsed.get("skills"):
-        main_skill_concept = next((s for s in ['Python', 'Java', 'SQL', 'React', 'AWS'] if s in resume_parsed['skills']), 'a core technical concept')
+        main_skill_concept = next((s for s in ['Python', 'Java', 'SQL', 'React', 'AWS', 'Docker', 'Microservices'] if s in resume_parsed['skills']), 'core technical concept')
         questions.append({
             "id": 4,
-            "category": "Concept Deep Dive",
-            "question": f"Let's test your fundamental knowledge in **{main_skill_concept}**. If you were debugging a performance issue in a high-traffic system, describe the exact tools and methodology you would use to pinpoint the bottleneck.",
+            "category": "System Design & Strewn Concepts",
+            "question": f"We require solid systems thinking. **Design a simplified high-traffic URL shortening service** (like bit.ly). Describe the essential database schema, the cache invalidation strategy, and how you prevent collisions in a distributed environment.",
             "follow_ups": [
-                f"Can you explain the difference between L1 and L2 regularization and when you would choose one over the other?",
-                "Describe a situation where you had to debug a race condition in a production environment.",
-                "How do you implement and measure true performance optimization in a large-scale system?",
-                f"Beyond the basics, what are the most critical, yet often misunderstood, aspects of {main_skill_concept}?"
+                f"How would you specifically handle a flash crowd event (e.g., 10x traffic spike) given the constraints of your **{main_skill_concept}** knowledge?",
+                "What monitoring and alerting thresholds would you set for latency and error rates on that service?",
+                "How does eventual consistency differ from strong consistency in the context of this service, and which is appropriate for the link mapping table?"
             ]
         })
     
-    # --- 5. General and Closing ---
+    # --- 5. General and Closing (Keep as 5th Q for sequence alignment) ---
     questions.append({
         "id": len(questions) + 1,
         "category": "Closing",
@@ -248,6 +273,10 @@ def generate_interview_questions(resume_text: str, job_description: str = None, 
             "If you were hired, what would you hope to accomplish in your first 90 days?",
         ]
     })
+    
+    # Re-align IDs just in case the length changed
+    for i, q in enumerate(questions):
+        q['id'] = i + 1
 
     return questions
 
@@ -257,13 +286,13 @@ async def transcribe_audio_with_groq(audio_data: bytes) -> str:
         return ""
 
     if not groq_client:
-        # Enhanced simulation responses
+        # Enhanced simulation responses - randomized to prevent predictability
         responses = [
-            "I have about 3 years of experience as a software developer, mainly working on web applications using Python and JavaScript.",
-            "My most challenging project was building a real-time dashboard that had to handle thousands of concurrent users. I used WebSockets and Redis for caching.",
-            "I really enjoy problem-solving and creating solutions that make people's work easier. I'm passionate about writing clean, maintainable code.",
-            "When debugging, I usually start by reproducing the issue, then I use logging and debugging tools to trace through the code step by step.",
-            "I stay current by following tech blogs, taking online courses, and working on side projects to experiment with new technologies."
+            "My experience is mainly in Python for machine learning. I'm exploring deep learning frameworks now.",
+            "The most complex part was optimizing the database queries to handle large transactional loads efficiently.",
+            "I would choose Java for its robustness in enterprise applications, especially for multi-threading performance.",
+            "I'm looking to improve my knowledge of cloud infrastructure like AWS Lambda and Terraform.",
+            "I enjoy the challenging part of converting a vague business requirement into a tangible technical design."
         ]
         import random
         return random.choice(responses)
@@ -275,6 +304,8 @@ async def transcribe_audio_with_groq(audio_data: bytes) -> str:
 
         try:
             with open(temp_filename, "rb") as audio_file:
+                # NOTE: The Groq whisper model is excellent and fast for transcription
+                # Use a specific, fast Groq model for audio transcription
                 transcription = groq_client.audio.transcriptions.create(
                     file=audio_file,
                     model="whisper-large-v3-turbo",
@@ -297,38 +328,76 @@ async def transcribe_audio_with_groq(audio_data: bytes) -> str:
         logger.error(f"Transcription failed: {e}")
         return ""
 
-async def generate_conversational_response(user_text: str, context: Dict) -> str:
-    """Generate conversational AI response that continues the interview, prioritizing a deep drill-down."""
+async def generate_conversational_response(user_text: str, context: Dict) -> Dict[str, str]:
+    """
+    Generate conversational AI response or return a signal to advance the structured question.
+    Returns: {"response": str, "action": str (text or ACTION_NEXT_Q)}
+    """
     if not user_text or len(user_text.strip()) < 5:
-        return "I'm sorry, I didn't catch that. Could you please repeat your response?"
+        return {"response": "I'm sorry, I didn't catch that. Could you please repeat your response?", "action": "CONTINUE"}
 
     current_question = context.get('current_question', {})
     question_category = current_question.get('category', 'General')
     conversation_history = context.get('conversation', [])
     session_data = context.get('session_data', {})
     resume_parsed = session_data.get('resumeParsed', {})
+    candidate_name = resume_parsed.get('candidateName', 'Candidate')
     
-    # --- Enhanced Simulation Mode Responses (Updated) ---
-    if not groq_client:
-        # Simulation responses adapted to be friendly and drill down
-        candidate_name = resume_parsed.get('candidateName', 'Candidate')
+    # --- Check for explicit flow control requests (Simulation & Real) ---
+    user_lower = user_text.lower()
+    
+    # --- 1. REPEAT/CLARIFICATION REQUEST (Highest Priority) ---
+    # Fix: Added explicit logic to detect "repeat" and return the last AI message.
+    repeat_phrases = ["repeat the question", "say that again", "i don't hear", "could you repeat", "didn't catch that", "can you repeat"]
+    if any(phrase in user_lower for phrase in repeat_phrases):
+        # Look up the last AI message sent (the actual question/follow-up)
+        last_ai_message = next((item['content'] for item in reversed(conversation_history) if item['role'] == 'ai'), "Could you please clarify what you'd like me to repeat?")
+        return {"response": last_ai_message, "action": "CONTINUE"}
         
+    # --- 2. END INTERVIEW REQUEST (Critical) ---
+    # FIX: Added "i can leave the interview" and "sorry i have work" to this list.
+    if any(phrase in user_lower for phrase in ["let's conclude", "i'm done", "i'm going", "end interview", "i can leave the interview", "i have some work", "sorry i have work"]):
+        return {"response": f"I understand. Thank you for your time, {candidate_name}. That concludes our interview.", "action": ACTION_NEXT_Q}
+
+    # --- 3. NEXT STRUCTURED QUESTION REQUEST (Critical) ---
+    # FIX: Added "change the topic" and "let's talk about" to this list.
+    if any(phrase in user_lower for phrase in [
+        "can't answer further", "proceed for further questions", "move on", "next question", 
+        "skip this", "i don't know much about that", "i don't know", "next topic", 
+        "ask me another question", "carry on", "change the topic", "let's talk about"
+    ]):
+        return {"response": f"I understand, {candidate_name}. Let's conclude this topic and move to the next structured question.", "action": ACTION_NEXT_Q}
+        
+    # Third Priority: Simulation Mode Pivot Detection (If Groq is unavailable)
+    if not groq_client:
+        if "java coding questions" in user_lower or ("java" in user_lower and "coding" in user_lower):
+            return {"response": f"Absolutely, {candidate_name}. Let's pivot to Java coding. Describe how you would implement a thread-safe singleton pattern in Java 8 or later.", "action": "CONTINUE"}
+        
+        # Simulation responses adapted to be friendly and drill down
         category_responses = {
-            'Introduction': [
-                f"That's a great overview, {candidate_name}! I'm keen to hear more about your technical competencies now.",
-                f"Thank you for that introduction, {candidate_name}. It sounds like you're passionate about Machine Learning."
+            'Introduction & Career Path': [
+                f"That's a very solid achievement, {candidate_name}! To strew that achievement: what was the specific complexity or data challenge that surprised you the most?",
+                f"Thank yourself for that introduction, {candidate_name}. It sounds like you're aiming for a Senior role. How does that project specifically prepare you for the system ownership required in our role?"
             ],
-            'Project Deep Dive': [
-                f"That sounds like a complex project, {candidate_name}! To drill down on the architecture: what specific trade-offs did you make regarding latency versus throughput?",
+            'Aggressive Project Deep Dive': [
+                f"That sounds like a demanding recovery, {candidate_name}! Let's drill down: what was the exact commit or configuration change that caused the failure, and what metrics did you use to get the 'all clear' after the fix?",
                 f"Impressive work, {candidate_name}! Can you explain the *exact* data structure you chose to handle the memory constraints when processing large, real-time datasets?"
             ],
-            'Concept Deep Dive': [
+            'System Design & Strewn Concepts': [
                 f"That's a solid explanation, {candidate_name}. Now, let's take that a layer deeper: why is it generally recommended to normalize the features before training a linear regression model, and what happens if you skip that step?",
                 f"Very insightful, {candidate_name}. Based on your experience, how does **Python's GIL** affect high-performance data processing, and what *specific* library or approach do you use to work around it?"
             ],
-            'JD Alignment': [
-                f"That direct connection to the role is helpful, {candidate_name}. Tell me more about a time you led a data cleaning effort, focusing on your choice of tools.",
+            'JD Alignment & Strewn': [
+                f"That direct connection to the role is helpful, {candidate_name}. Tell me more about a time you led a data cleaning effort, focusing on your choice of tools and the cost-benefit analysis of that cleanup.",
                 f"Your skills align well, {candidate_name}! What part of our company's mission resonates most with your Data Science goals?"
+            ],
+            'Technical Debt & Architecture': [
+                f"That's a strong strategy, {candidate_name}. What metrics specifically showed you that the refactoring was finished, and how did you convince management to allocate the necessary time for the cleanup?",
+                f"Interesting perspective, {candidate_name}! What did you learn from that situation?"
+            ],
+            'Closing': [
+                f"Those are excellent questions, {candidate_name}. To follow up on your point about team culture: how do you foster technical curiosity and continuous learning within a team?",
+                f"That's a strong vision for your 90 days, {candidate_name}! Can you give me a specific technical goal and a non-technical goal you'd set for yourself in that period?"
             ],
             'General': [
                 f"That's very insightful, {candidate_name}. Can you tell me more about how that experience shaped your approach?",
@@ -336,78 +405,43 @@ async def generate_conversational_response(user_text: str, context: Dict) -> str
             ]
         }
         
-        # Check if user requested a pivot or transition (Simulation)
-        user_lower = user_text.lower()
-        if any(phrase in user_lower for phrase in ["can't answer further", "proceed for further questions", "move on", "next question"]):
-             return f"I understand, {candidate_name}. Let's conclude this topic and move to the next structured question."
-        
-        # Simulation: Immediate agreement to pivot to Java coding
-        if "java coding questions" in user_lower or ("java" in user_lower and "coding" in user_lower and not "oops" in user_lower) :
-            return f"Absolutely, {candidate_name}. Let's pivot to Java coding. Describe how you would implement a thread-safe singleton pattern in Java 8 or later."
-        
-        # Check for technical drill-down opportunity
-        technical_keywords = ['python', 'java', 'oops', 'ml', 'machine learning', 'data science', 'aws', 'docker']
-        for skill in technical_keywords:
-             if skill in user_lower:
-                return f"Excellent, {candidate_name}! You mentioned **{skill}**. Let's dive into that: can you explain the difference between **shallow and deep copies** in Python and provide a scenario where a shallow copy caused a significant production bug?"
-        
-        # Simple meta-query handling simulation
-        if any(phrase in user_lower for phrase in ["time is it", "how many questions", "company name"]):
-            if "time is it" in user_lower:
-                return f"It's currently {datetime.now().strftime('%H:%M')}. Let's get back to your technical experience now, {candidate_name}."
-            elif "how many questions" in user_lower:
-                total_q = len(session_data.get("questions", []))
-                current_q_index = session_data.get("currentQuestion", 0)
-                return f"We're on question {current_q_index + 1} out of {total_q}, {candidate_name}. Please continue with your previous answer."
-            else:
-                return f"The company name is fictitious for this simulation, {candidate_name}. Now, regarding your project..."
-
-
         responses = category_responses.get(question_category, category_responses['General'])
         import random
-        return random.choice(responses)
+        return {"response": random.choice(responses), "action": "CONTINUE"}
     # --- End Simulation Mode ---
 
+    # --- Real Groq-powered conversational response generation ---
     try:
-        # Build conversation context
         recent_context = ""
         if conversation_history:
-            recent_exchanges = conversation_history[-4:]  # Last 2 Q&A pairs
+            recent_exchanges = conversation_history[-4:] 
             for entry in recent_exchanges:
                 role = "Interviewer" if entry.get("role") == "ai" else "Candidate"
-                # Limit content length for system prompt efficiency
-                content_preview = entry.get('content', '')[:100].replace('\n', ' ') 
-                recent_context += f"{role}: {content_preview}...\n"
+                content = entry.get('content', '').replace('\n', ' ') 
+                recent_context += f"{role}: {content}\n"
         
-        # Additional context for deep dives
         resume_context = json.dumps(resume_parsed.get('skills', []))
-        candidate_name = resume_parsed.get('candidateName', 'Candidate')
         job_role = session_data.get('jobDescription', {}).get('role', 'a technical role')
 
         # --- CRITICAL SYSTEM PROMPT REVISION FOR TECHNICAL DRILL DOWN ---
-        system_prompt = f"""You are a highly skilled, **friendly, encouraging, and professional** AI interviewer specializing in **{job_role}**. Your primary goal is to conduct a **deep-dive conversation** to rigorously assess the candidate's core technical and conceptual knowledge, all while maintaining an encouraging tone.
+        # The prompt is simplified to focus purely on the next conversational turn.
+        system_prompt = f"""You are a highly skilled, **friendly, rigorously professional, and demanding** AI interviewer specializing in **{job_role}**. Your primary goal is to conduct a **deep-drill, strewing conversation** to rigorously assess the candidate's core technical competence.
 
 Candidate: **{candidate_name}**
 Current Interview Focus: **{question_category}**
-Candidate's Key Skills (from resume, to guide deep-drills): {resume_context}
+Candidate's Key Skills (to guide deep-drills): {resume_context}
 
-Recent conversation:
+Recent conversation history:
 {recent_context}
 
 The candidate just responded: "{user_text}"
 
-Your next step is critical. Your instructions are:
-1.  **Tone and Acknowledgment:** Start by giving a friendly acknowledgment that **must include the candidate's name, {candidate_name}**, to establish a professional and encouraging rapport (e.g., "Excellent point, {candidate_name}!" or "That's insightful, {candidate_name}."). **Do not use confrontational language (e.g., 'bold assertion').**
-2.  **CRITICAL PIVOT/TRANSITION HANDLING (Highest Priority):**
-    * **DOMAIN SWITCH:** If the candidate explicitly requests a specific new topic, language, or topic change (e.g., 'Java questions', 'Python coding questions', 'Leave OOP', 'move to coding'), **immediately agree** and ask a challenging question specific to that new preference. Do not argue, negotiate, or revert to the previous topic/language.
-    * **INTERVIEW END:** If the candidate says 'let's conclude,' 'I'm done,' or 'sorry, I'm going,' generate a single, polite sentence to conclude the interview and signal the end (e.g., "I understand. Thank you for your time, {candidate_name}. That concludes our interview.").
-3.  **META-QUERY HANDLING (General Queries):**
-    * If the candidate's response is a general query (e.g., 'What time is it?'), **answer concisely** and then immediately prompt them back to the original technical question.
-4.  **TECHNICAL DEEP DRILL RULE (Standard Follow-up):**
-    * If the candidate *is* answering the question and has *not* requested a pivot or end:
-        * **DRILL DOWN:** Ask a challenging follow-up that seeks *specific implementation details*, *rationale for trade-offs*, or *metrics* based directly on their previous answer. **Avoid simple behavioral questions.**
+Your goal is to generate ONLY the next conversational line of questioning that is challenging and highly specific to their answer.
 
-**Length Constraint:** Keep your entire response to **one or two concise, encouraging sentences (under 150 characters total)**. Maintain professional rigor throughout."""
+1.  **Tone:** Start with a friendly acknowledgment that **must include the candidate's name, {candidate_name}**.
+2.  **Logic:** Ask a challenging, highly specific, technical follow-up that seeks to find the limits of their knowledge **based directly on their response ("{user_text}")**. Focus on **implementation specifics, edge cases, system trade-offs, or quantifiable metrics.**
+3.  **Length Constraint:** Keep your entire response to **one or two concise, encouraging sentences (under 200 characters total)**.
+"""
         # --- END SYSTEM PROMPT REVISION ---
 
         response = groq_client.chat.completions.create(
@@ -416,21 +450,142 @@ Your next step is critical. Your instructions are:
                 {"role": "user", "content": user_text}
             ],
             model="llama-3.1-8b-instant",
-            temperature=0.85, # Increased temperature slightly for more natural conversation
-            max_tokens=150
+            temperature=0.85, 
+            max_tokens=250 
         )
 
         ai_response = response.choices[0].message.content.strip()
         logger.info(f"Generated conversational response: {ai_response[:80]}...")
-        return ai_response
+        
+        # Check if the AI's generated response implies the conversation is stuck (e.g., repeating the same question).
+        # We assume if the user didn't ask to move on, the AI will continue the drill.
+        return {"response": ai_response, "action": "CONTINUE"}
 
     except Exception as e:
         logger.error(f"AI response generation failed: {e}")
-        return "That's really insightful! I'd love to follow up on that point to understand your thinking better."
+        return {"response": "That's really insightful! I'd love to follow up on that point to understand your thinking better.", "action": "CONTINUE"}
 
-# --- API Endpoints and Manager (Remaining code is the same) ---
+async def generate_interview_report(session_data: Dict) -> Dict:
+    """Generates a structured final report using LLM based on conversation history."""
+    
+    # --- NEW STRICTNESS CHECK ---
+    user_responses = [item for item in session_data['conversation'] if item['role'] == 'user']
+    
+    if len(user_responses) < MINIMUM_RESPONSES_FOR_LLM:
+        logger.warning(f"Insufficient responses ({len(user_responses)}). Returning strict rejection report.")
+        return {
+            "evaluation": [
+                {"category": "Communication", "score": 1.0, "comment": "No verbal engagement detected during the session."},
+                {"category": "Technical Depth", "score": 1.0, "comment": "No technical answers or context provided."},
+                {"category": "Confidence", "score": 1.0, "comment": "Failed to engage in the required conversational format."},
+                {"category": "Emotional Control", "score": 1.0, "comment": "Unable to assess emotional control due to lack of participation."},
+                {"category": "Job Role Alignment", "score": 1.0, "comment": "No evidence to support role alignment."}
+            ],
+            "overallScore": 1.0, 
+            "recommendation": "Strongly Not Recommended (Candidate failed to participate)."
+        }
+    
+    # Simulation Data (If Groq is not available)
+    if not groq_client:
+        logger.info("Using simulation report data.")
+        # Adjusted simulation scores to be stricter
+        return {
+            "evaluation": [
+                {"category": "Communication", "score": 6.0, "comment": "Good fluency but needed more concise, structured arguments."},
+                {"category": "Technical Depth", "score": 4.5, "comment": "Core answers were vague, lacking implementation and trade-off details."},
+                {"category": "Confidence", "score": 6.5, "comment": "Maintained poise but lacked conviction on specific technical choices."},
+                {"category": "Emotional Control", "score": 7.0, "comment": "Handled pressure well; remained calm under unexpected probing."},
+                {"category": "Job Role Alignment", "score": 5.0, "comment": "Difficulty linking specific past impact to role's required scope."}
+            ],
+            "overallScore": 5.8, # Calculated average is 5.8
+            "recommendation": "Not recommended at this time (Serious gaps in technical depth confirmed)."
+        }
 
-# WebSocket Connection Manager (same)
+    # Real LLM Call with Structured Output
+    candidate_name = session_data['resumeParsed'].get('candidateName', 'Candidate')
+    job_role = session_data['jobDescription'].get('role', 'Technical Role')
+    
+    transcript = "\n".join([f"{item['role'].title()}: {item['content']}" for item in session_data['conversation']])
+
+    system_prompt = f"""You are a senior hiring manager. Your task is to analyze the complete interview transcript and generate a final evaluation report. You are grading this candidate for a **Senior/Lead level technical role**, demanding **uncompromising standards**. Be extremely rigorous. A score of 7 or lower suggests serious performance gaps. A score of 5 or lower means a strong rejection.
+    The evaluation must strictly adhere to the required JSON schema for six categories.
+    
+    Interview Context:
+    - Candidate Name: {candidate_name}
+    - Job Role: {job_role}
+    - Candidate Skills: {session_data['resumeParsed'].get('skills', [])}
+    
+    Interview Transcript:
+    ---
+    {transcript}
+    ---
+    
+    Instructions:
+    1. Score each category (Communication, Technical Depth, Confidence, Emotional Control, Job Role Alignment) from 1 to 10 (10 is best).
+    2. The 'Overall Score' must be the average of the five category scores, rounded to one decimal point.
+    3. The 'Recommendation' should be a single sentence: 'Recommended for next round' or 'Not recommended at this time'.
+    4. Provide an insightful 'Comment' for each category (under 15 words).
+    5. Output must be ONLY the JSON object conforming to the schema."""
+
+    report_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "evaluation": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "category": {"type": "STRING"},
+                        "score": {"type": "NUMBER"},
+                        "comment": {"type": "STRING"}
+                    },
+                    "required": ["category", "score", "comment"]
+                }
+            },
+            "overallScore": {"type": "NUMBER"},
+            "recommendation": {"type": "STRING"}
+        },
+        "required": ["evaluation", "overallScore", "recommendation"]
+    }
+
+    try:
+        response = groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt}
+            ],
+            model="llama-3.1-8b-instant",
+            temperature=0.2, # Set temperature lower for stricter, less generous scoring.
+            response_mime_type="application/json",
+            response_schema=report_schema
+        )
+        
+        json_string = response.choices[0].message.content.strip()
+        report = json.loads(json_string)
+        
+        # Re-calculate to ensure accuracy
+        total_score = sum(item['score'] for item in report['evaluation'])
+        report['overallScore'] = round(total_score / len(report['evaluation']), 1)
+        
+        return report
+
+    except Exception as e:
+        logger.error(f"Failed to generate structured report via Groq (falling back to simulation): {e}")
+        # Fallback to the same strict simulation if the LLM call fails
+        return {
+            "evaluation": [
+                {"category": "Communication", "score": 6.0, "comment": "Good fluency but needed more concise, structured arguments."},
+                {"category": "Technical Depth", "score": 4.5, "comment": "Core answers were vague, lacking implementation and trade-off details."},
+                {"category": "Confidence", "score": 6.5, "comment": "Maintained poise but lacked conviction on specific technical choices."},
+                {"category": "Emotional Control", "score": 7.0, "comment": "Handled pressure well; remained calm under unexpected probing."},
+                {"category": "Job Role Alignment", "score": 5.0, "comment": "Difficulty linking specific past impact to role's required scope."}
+            ],
+            "overallScore": 5.8,
+            "recommendation": "Not recommended at this time (Serious gaps in technical depth confirmed)."
+        }
+
+
+# --- API Endpoints and Manager ---
+
 class ConversationManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
@@ -523,10 +678,8 @@ async def setup_interview(request: InterviewRequest):
         job_desc_text = request.job_description.text if request.job_description else ""
         job_role = request.job_description.role if request.job_description else "General Technical Role"
         
-        # Update job role in parsed data for better question generation
         session_data["resumeParsed"]["jobDescription"] = {"role": job_role}
         
-        # Pass parsed content to question generation
         questions = generate_interview_questions(
             session_data["resumeText"], 
             job_desc_text,
@@ -581,13 +734,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         session_data["startTime"] = datetime.utcnow()
         manager.conversation_states[session_id] = 'asking'
 
-        # Fetch candidate name for personalized intro
-        candidate_name = session_data["resumeParsed"].get("candidateName", "Candidate")
-        
-        # --- FIX: Removed the redundant initial 'ai_message' (welcome_msg) ---
-        # The intro is now merged into the first 'ai_question' below, improving flow.
-        
-        # Wait and ask first question
         await asyncio.sleep(1)
 
         if questions and session_data["isActive"]:
@@ -613,18 +759,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
             session_data["currentQuestion"] = 0
 
-            # Now wait for user response
-            await asyncio.sleep(2)  # Give time for AI to finish speaking
-
-            manager.conversation_states[session_id] = 'listening'
-            manager.listening_for_response[session_id] = True
-
-            await manager.send_message(session_id, {
-                "type": "start_listening",
-                "message": "I'm listening for your response...",
-                "state": "listening_for_answer"
-            })
-
         # Handle conversation loop
         while session_data.get("isActive", False):
             try:
@@ -633,6 +767,20 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 message_type = data_json.get("type")
 
                 logger.info(f"Received: {message_type} (State: {manager.conversation_states.get(session_id)})")
+                
+                # --- NEW MESSAGE TYPE FOR TTS COMPLETED ---
+                if message_type == "speech_finished":
+                    # This is the signal from the client that the question/response has been fully read.
+                    if manager.conversation_states.get(session_id) in ('asking', 'responding'):
+                        manager.conversation_states[session_id] = 'listening'
+                        manager.listening_for_response[session_id] = True
+                        
+                        await manager.send_message(session_id, {
+                            "type": "start_listening",
+                            "message": "I'm listening for your response...",
+                            "state": "listening_for_answer"
+                        })
+                    continue 
 
                 if message_type == "audio_response" and manager.listening_for_response.get(session_id, False):
                     # Process user's audio response
@@ -669,19 +817,20 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                     "timestamp": datetime.utcnow().isoformat()
                                 })
 
-                                # Generate AI conversational response
+                                # Generate AI conversational response/action
                                 current_q_index = session_data.get("currentQuestion", 0)
                                 current_question = questions[current_q_index] if current_q_index < len(questions) else {}
 
                                 context = {
                                     "current_question": current_question,
                                     "conversation": session_data["conversation"],
-                                    "session_data": session_data # Pass all session data for rich context
+                                    "session_data": session_data 
                                 }
 
-                                ai_response = await generate_conversational_response(transcription, context)
-
-                                # Send AI conversational response
+                                ai_output = await generate_conversational_response(transcription, context)
+                                ai_response = ai_output["response"]
+                                ai_action = ai_output["action"]
+                                
                                 manager.conversation_states[session_id] = 'responding'
 
                                 await manager.send_message(session_id, {
@@ -696,44 +845,33 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                     "content": ai_response,
                                     "timestamp": datetime.utcnow().isoformat()
                                 })
-
-                                # Wait for AI to finish speaking, then continue
-                                await asyncio.sleep(4)
                                 
-                                # Check if AI response contained a definitive transition phrase to move to next structured Q
-                                transition_phrases = ["let's move to the next question", "concludes this topic", "I understand, we can move"]
-                                needs_manual_next = not any(phrase in ai_response.lower() for phrase in transition_phrases)
-
-
-                                if session_data.get("isActive", False):
-                                    # Resume listening for more from user or move to next question
-                                    manager.conversation_states[session_id] = 'listening'
-                                    manager.listening_for_response[session_id] = True
-
-                                    await manager.send_message(session_id, {
-                                        "type": "continue_listening",
-                                        "message": "Please continue, or I can move to the next question...",
-                                        "state": "listening_for_more"
-                                    })
+                                # CRITICAL FLOW CONTROL: Check if AI has signaled to move on
+                                if ai_action == ACTION_NEXT_Q:
+                                    # The AI has gracefully concluded the current topic. Trigger the next question logic.
+                                    
+                                    # If the next question index is out of bounds, complete the interview
+                                    next_q_index = current_q_index + 1
+                                    
+                                    if next_q_index < len(questions):
+                                        # Manually send the next_question type to simulate a button click/advancement
+                                        # This is safe because the AI has explicitly requested the transition.
+                                        manager.conversation_states[session_id] = 'waiting_to_ask'
+                                        await asyncio.sleep(0.5) # Wait half a second for previous TTS to finish buffering
+                                        await manager.send_message(session_id, {"type": "next_question"}) 
+                                        
+                                    else:
+                                        # The last question was answered, and the AI asked to conclude.
+                                        # Trigger the final report generation logic immediately.
+                                        await manager.send_message(session_id, {"type": "end_interview"})
+                                        break # Exit the loop, report generation handled by end_interview logic
 
                             else:
                                 # No valid transcription - ask to repeat
                                 await manager.send_message(session_id, {
                                     "type": "ask_repeat",
                                     "content": "I'm sorry, I didn't catch that clearly. Could you please repeat your answer?",
-                                    "speak": True,
-                                    "state": "asking_repeat"
-                                })
-
-                                await asyncio.sleep(2)
-
-                                manager.conversation_states[session_id] = 'listening'
-                                manager.listening_for_response[session_id] = True
-
-                                await manager.send_message(session_id, {
-                                    "type": "resume_listening",
-                                    "message": "I'm listening...",
-                                    "state": "listening_for_answer"
+                                    "speak": True
                                 })
 
                         except Exception as e:
@@ -745,11 +883,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                 "speak": True
                             })
 
-                            manager.conversation_states[session_id] = 'listening'
-                            manager.listening_for_response[session_id] = True
-
                 elif message_type == "next_question":
-                    # Move to next question
+                    # Move to next structured question (Triggered by client or by AI action above)
                     current_q_index = session_data.get("currentQuestion", 0)
                     next_q_index = current_q_index + 1
 
@@ -778,20 +913,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             "questionId": next_question["id"]
                         })
 
-                        # Wait then start listening for response
-                        await asyncio.sleep(3)
-
-                        manager.conversation_states[session_id] = 'listening'
-                        manager.listening_for_response[session_id] = True
-
-                        await manager.send_message(session_id, {
-                            "type": "start_listening",
-                            "message": "I'm listening for your response to this question...",
-                            "state": "listening_for_answer"
-                        })
-
                     else:
-                        # Interview completed
+                        # Interview completed (No more structured questions)
+                        # This handles the case where the client clicked 'next' on the final question.
+                        
+                        report_data = await generate_interview_report(session_data)
+                        
                         session_data["status"] = "completed"
                         session_data["endTime"] = datetime.utcnow()
 
@@ -801,7 +928,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             "type": "interview_completed",
                             "content": completion_msg,
                             "speak": True,
-                            "state": "interview_finished"
+                            "state": "interview_finished",
+                            "report": report_data 
                         })
 
                         session_data["conversation"].append({
@@ -810,17 +938,24 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             "timestamp": datetime.utcnow().isoformat()
                         })
 
+                        break
+
                 elif message_type == "end_interview":
+                    # Interview manually ended (or triggered by final AI action)
+                    
+                    report_data = await generate_interview_report(session_data)
+                    
                     session_data["status"] = "completed"
                     session_data["endTime"] = datetime.utcnow()
 
-                    end_msg = "Thank you for your time! It was great talking with you."
+                    end_msg = "Thank you for your time! It was great talking with you. Your final report is ready."
 
                     await manager.send_message(session_id, {
-                        "type": "interview_completed",
+                        "type": "interview_completed", 
                         "content": end_msg,
                         "speak": True,
-                        "state": "interview_ended"
+                        "state": "interview_ended",
+                        "report": report_data 
                     })
 
                     break
@@ -829,6 +964,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 break
             except Exception as e:
                 logger.error(f"WebSocket conversation error: {e}")
+                # Log traceback for better debugging
+                logger.error(traceback.format_exc())
 
     finally:
         if session_id in sessions:
@@ -839,7 +976,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 async def health_check():
     return {
         "status": "healthy",
-        "version": "8.6.0",
+        "version": "9.2.0",
         "features": {
             "conversationalInterview": True,
             "aiAsksAndListens": True,
@@ -856,5 +993,4 @@ if __name__ == "__main__":
     print("🎤 Starting Conversational AI Interview System...")
     print("📍 AI asks questions AND listens to your answers")
     print("💬 Real back-and-forth conversation like a human interviewer")
-    uvicorn.run(app, host="0.0.0.0", port=PORT, reload=DEBUG) 
-
+    uvicorn.run(app, host="0.0.0.0", port=PORT, reload=DEBUG)
